@@ -41,7 +41,7 @@ uint8_t broadcastAddress[] = {0xFF,0xFF,0xFF,0xFF,0xFF,0xFF};
 
 // ================= DEDUP =================
 std::deque<String> recentMsgKeys;
-const size_t maxRecentIDs = 50;
+const size_t maxRecentIDs = 200; // Can be made configurable via Preferences
 
 //==================Function Prototypes==================
 const char* getTypeName(message_type_t type);
@@ -49,10 +49,9 @@ bool isDuplicate(const String& sender, const String& msg_id);
 String generateMessageID();
 String encryptSimple(String msg, String enckey);
 String decryptSimple(String msg, String enckey);
-void mesh_setup();
+void mesh_gw_setup();
 void onReceive(const uint8_t *mac, const uint8_t *incomingData, int len);
 //============================================================================//
-
 
 bool isDuplicate(const String& sender, const String& msg_id) {
     String key = sender + ":" + msg_id;
@@ -78,7 +77,7 @@ String generateMessageID() {
 }
 
 // ================= ENCRYPTION =================
-bool useEncryption = true;
+bool useEncryption = false;
 String enckey = "dmabd987";
 String encCharset = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+=[]{}|:;<>?,./~";
 
@@ -166,9 +165,47 @@ void onReceive(const uint8_t *mac, const uint8_t *incomingData, int len) {
     String last_hop = msg.substring(commas[4] + 1, commas[5]);
     uint8_t hop_count = msg.substring(commas[5] + 1).toInt();
 
+    if(type == MSG_CMD) {
+        // Process command
+        Serial.println("⚙️ Processing command: " + command);
+        Serial.println("GW Should not executr commands");
+        sendLedCommand(LED_RF_CMD);
+        return;
+    }
+
     // Dedup
     if (isDuplicate(sender, msg_id)) {
         Serial.println("⚠️ Duplicate ignored");
+        return;
+    }
+    
+    if(type == MSG_HB) {
+        Serial.println("💓 Heartbeat from " + sender);
+        MQTTMessage hbMsg;
+        strcpy(hbMsg.topic, MQTT_LP_NODE_HB);
+        snprintf(hbMsg.payload, sizeof(hbMsg.payload), "%s,%s", sender.c_str(), command.c_str());
+        if (xQueueSend(mqttPublishQueue, &hbMsg, pdMS_TO_TICKS(100)) == pdTRUE) {
+            SerialMon.println("MainTask: Node Heartbeat queued");
+        }
+        sendLedCommand(LED_RF_HB);
+        return;
+    }
+
+    if(type == MSG_ACK) {
+        Serial.println("✅ ACK from " + sender + ": " + command);
+        MQTTMessage ackMsg;
+        strcpy(ackMsg.topic, MQTT_LP_NODE_ACK);
+        snprintf(ackMsg.payload, sizeof(ackMsg.payload), "%s,%s", sender.c_str(), command.c_str());
+        if (xQueueSend(mqttPublishQueue, &ackMsg, pdMS_TO_TICKS(100)) == pdTRUE) {
+            SerialMon.println("MainTask: Node ACK queued");
+        }
+        sendLedCommand(LED_RF_ACK);
+        return;
+    }
+
+    if(type == MSG_TMP) {
+        Serial.println("🌡️ Temp from " + sender + ": " + command);
+        // Handle temperature data if needed
         return;
     }
 
@@ -180,21 +217,9 @@ void onReceive(const uint8_t *mac, const uint8_t *incomingData, int len) {
                     msg_id.c_str(),
                     hop_count,
                     last_hop.c_str());
-
-    // LED Indication
-    LedBlink blink;
-    switch(type) {
-        case MSG_ACK: blink = {CRGB::Green,150,1,150}; break;
-        case MSG_HB:  blink = {CRGB::Blue,150,1,150}; break;
-        case MSG_TMP: blink = {CRGB::Red,150,1,150}; break;
-        default: return;
-    }
-
-    xQueueSend(ledQueue, &blink, 0);
 }
 
-
-void mesh_setup(){
+void mesh_gw_setup(){
     WiFi.mode(WIFI_STA);
     WiFi.disconnect();
 

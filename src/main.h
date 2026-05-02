@@ -1,11 +1,14 @@
 #pragma once
+
+
+#include<config.h>
 #include<Arduino.h>
 #include "mesh_gw.h"
 #include "led.h"
+#include "gsm.h"
 #include <freertos/FreeRTOS.h>
 #include <esp_task_wdt.h>
 #include <Preferences.h>
-#include<config.h>
 
 
 //Function Prototypes
@@ -13,9 +16,6 @@ void ledTask(void *param);
 void mainTask(void *param);
 
 Preferences preferences;
-
-// ================= FreeRTOS =================
-TaskHandle_t mainTaskHandle;
 
 #define DEBUG_MODE true
 #define DEBUG_PRINT(x)  if (DEBUG_MODE) { Serial.print(x); }
