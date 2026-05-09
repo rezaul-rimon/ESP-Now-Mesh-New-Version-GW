@@ -77,8 +77,8 @@ const char* MQTT_LP_ACK = "DMA-LP/GW/ACK";
 const char* MQTT_LP_NODE_HB = "DMA-LP/NODE/HB";
 const char* MQTT_LP_NODE_ACK = "DMA-LP/NODE/ACK";
 struct MQTTMessage {
-    char topic[50];
-    char payload[100];
+    char topic[64];
+    char payload[128];
 };
 
 // Helper functions

@@ -183,7 +183,7 @@ void onReceive(const uint8_t *mac, const uint8_t *incomingData, int len) {
         Serial.println("💓 Heartbeat from " + sender);
         MQTTMessage hbMsg;
         strcpy(hbMsg.topic, MQTT_LP_NODE_HB);
-        snprintf(hbMsg.payload, sizeof(hbMsg.payload), "%s,%s,%s", DEVICE_ID, sender.c_str(), command.c_str());
+        snprintf(hbMsg.payload, sizeof(hbMsg.payload), "%s,%s,%s", DEVICE_ID.c_str(), sender.c_str(), command.c_str());
         if (xQueueSend(mqttPublishQueue, &hbMsg, pdMS_TO_TICKS(100)) == pdTRUE) {
             SerialMon.println("MainTask: Node Heartbeat queued");
         }
@@ -195,7 +195,7 @@ void onReceive(const uint8_t *mac, const uint8_t *incomingData, int len) {
         Serial.println("✅ ACK from " + sender + ": " + command);
         MQTTMessage ackMsg;
         strcpy(ackMsg.topic, MQTT_LP_NODE_ACK);
-        snprintf(ackMsg.payload, sizeof(ackMsg.payload), "%s,%s,%s", DEVICE_ID, sender.c_str(), command.c_str());
+        snprintf(ackMsg.payload, sizeof(ackMsg.payload), "%s,%s,%s", DEVICE_ID.c_str(), sender.c_str(), command.c_str());
         if (xQueueSend(mqttPublishQueue, &ackMsg, pdMS_TO_TICKS(100)) == pdTRUE) {
             SerialMon.println("MainTask: Node ACK queued");
         }
