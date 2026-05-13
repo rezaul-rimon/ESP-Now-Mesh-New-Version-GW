@@ -8,10 +8,10 @@
 #include <esp_task_wdt.h>
 
 // ==================== Configuration ====================
-#define OTA 0  // Set to 1 for OTA mode, 0 for normal mode
+#define OTA 1  // Set to 1 for OTA mode, 0 for normal mode
 #define HW_VERSION "3.0"
-#define FW_VERSION "V1.103"
-#define OTA_DATE "260101"
+#define FW_VERSION "V1.104"
+#define OTA_DATE "260513"
 
 #define USE_LDR_SENSOR
 // #define USE_GY30
@@ -23,7 +23,7 @@
 
 #define WORK_PACKAGE "1225"
 #define DEVICE_TYPE "03"
-#define DEVICE_CODE_UPLOAD_DATE "260502"
+#define DEVICE_CODE_UPLOAD_DATE "2605011"
 #define DEVICE_SERIAL_ID "0001"
 
 #define UNIQUE_DEVICE_ID WORK_PACKAGE DEVICE_TYPE DEVICE_CODE_UPLOAD_DATE DEVICE_SERIAL_ID
@@ -52,7 +52,7 @@ String MAC_FALLBACK_ID = "";
 const unsigned long DATA_INTERVAL = 5 * 60000UL;  // 1 minute
 unsigned long lastDataTime = 0;
 const unsigned long MAIN_TASK_PRIORITY = 2;
-const unsigned long HEARTBEAT_INTERVAL = 15 * 60000UL;
+const unsigned long HEARTBEAT_INTERVAL = 5 * 60000UL;
 const unsigned long GSM_ERROR_RETRY_DELAY = 10000UL;
 unsigned long lastHeartbeat = 0;
 unsigned long lastGsmErrorTime = 0;
@@ -75,6 +75,7 @@ const char* MQTT_LP_SUB = "DMA-LP/GW/SUB/";
 const char* MQTT_LP_ACK = "DMA-LP/GW/ACK";
 
 const char* MQTT_LP_NODE_HB = "DMA-LP/NODE/HB";
+const char* MQTT_LP_NODE_SD = "DMA-LP/NODE/SD";
 const char* MQTT_LP_NODE_ACK = "DMA-LP/NODE/ACK";
 struct MQTTMessage {
     char topic[64];

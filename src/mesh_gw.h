@@ -10,7 +10,7 @@ typedef enum {
     MSG_CMD = 1,
     MSG_ACK,
     MSG_HB,
-    MSG_TMP
+    MSG_SD
 } message_type_t;
 
 // Helper for Serial Monitor
@@ -19,7 +19,7 @@ const char* getTypeName(message_type_t type) {
         case MSG_CMD: return "Command";
         case MSG_ACK: return "Acknowledgement";
         case MSG_HB:  return "Heartbeat";
-        case MSG_TMP: return "Temperature";
+        case MSG_SD: return "Sensor Data";
         default:      return "Unknown";
     }
 }
@@ -191,6 +191,18 @@ void onReceive(const uint8_t *mac, const uint8_t *incomingData, int len) {
         return;
     }
 
+    if(type == MSG_SD) {
+        Serial.println("🌡️ Sensor Data from " + sender + ": " + command);
+        MQTTMessage sdMsg;
+        strcpy(sdMsg.topic, MQTT_LP_NODE_SD);
+        snprintf(sdMsg.payload, sizeof(sdMsg.payload), "%s,%s,%s", DEVICE_ID.c_str(), sender.c_str(), command.c_str());
+        if (xQueueSend(mqttPublishQueue, &sdMsg, pdMS_TO_TICKS(100)) == pdTRUE) {
+            SerialMon.println("MainTask: Node Sensor Data queued");
+        }
+        sendLedCommand(LED_RF_HB);
+        return;
+    }
+
     if(type == MSG_ACK) {
         Serial.println("✅ ACK from " + sender + ": " + command);
         MQTTMessage ackMsg;
@@ -200,12 +212,6 @@ void onReceive(const uint8_t *mac, const uint8_t *incomingData, int len) {
             SerialMon.println("MainTask: Node ACK queued");
         }
         sendLedCommand(LED_RF_ACK);
-        return;
-    }
-
-    if(type == MSG_TMP) {
-        Serial.println("🌡️ Temp from " + sender + ": " + command);
-        // Handle temperature data if needed
         return;
     }
 

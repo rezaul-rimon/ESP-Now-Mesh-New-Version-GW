@@ -25,7 +25,7 @@ void setup() {
     delay(100);
 
     SerialMon.println("\n====================================");
-    SerialMon.println("  ==    DMA IoT Security GATEWAY    ==");
+    SerialMon.println("  ==    DMA IoT Lamp-Post GATEWAY    ==");
     SerialMon.println("--------------------------------------");
     SerialMon.printf ("  ==      FW Version: %s        ==", FW_VERSION);
     SerialMon.println();
