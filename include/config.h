@@ -9,7 +9,7 @@
 
 // ==================== Configuration ====================
 #define OTA 1  // Set to 1 for OTA mode, 0 for normal mode
-#define HW_VERSION "3.0"
+#define HW_VERSION "3.1"
 #define FW_VERSION "V1.104"
 #define OTA_DATE "260513"
 
@@ -23,8 +23,8 @@
 
 #define WORK_PACKAGE "1225"
 #define DEVICE_TYPE "03"
-#define DEVICE_CODE_UPLOAD_DATE "2605011"
-#define DEVICE_SERIAL_ID "0001"
+#define DEVICE_CODE_UPLOAD_DATE "260121"
+#define DEVICE_SERIAL_ID "0003"
 
 #define UNIQUE_DEVICE_ID WORK_PACKAGE DEVICE_TYPE DEVICE_CODE_UPLOAD_DATE DEVICE_SERIAL_ID
 
