@@ -5,6 +5,20 @@
 #include <algorithm>
 #include<led.h>
 
+// ================= DEVICE =================
+const char* Local_ID = "gw0";
+uint8_t broadcastAddress[] = {0xFF,0xFF,0xFF,0xFF,0xFF,0xFF};
+
+// ================= DEDUP =================
+std::deque<String> recentMsgKeys;
+const size_t maxRecentIDs = 200; // Can be made configurable via Preferences
+
+// ================= ENCRYPTION =================
+bool useEncryption = false;
+String enckey = "dmabd987";
+String encCharset = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+=[]{}|:;<>?,./~";
+
+
 // ================= ENUM =================
 typedef enum {
     MSG_CMD = 1,
@@ -13,16 +27,6 @@ typedef enum {
     MSG_SD
 } message_type_t;
 
-// Helper for Serial Monitor
-const char* getTypeName(message_type_t type) {
-    switch(type) {
-        case MSG_CMD: return "Command";
-        case MSG_ACK: return "Acknowledgement";
-        case MSG_HB:  return "Heartbeat";
-        case MSG_SD: return "Sensor Data";
-        default:      return "Unknown";
-    }
-}
 
 // ================= MESSAGE =================
 struct Message {
@@ -35,24 +39,36 @@ struct Message {
     uint8_t hop_count;
 };
 
-// ================= DEVICE =================
-const char* Local_ID = "gw0";
-uint8_t broadcastAddress[] = {0xFF,0xFF,0xFF,0xFF,0xFF,0xFF};
-
-// ================= DEDUP =================
-std::deque<String> recentMsgKeys;
-const size_t maxRecentIDs = 200; // Can be made configurable via Preferences
-
 //==================Function Prototypes==================
 const char* getTypeName(message_type_t type);
-bool isDuplicate(const String& sender, const String& msg_id);
 String generateMessageID();
+bool isDuplicate(const String& sender, const String& msg_id);
 String encryptSimple(String msg, String enckey);
 String decryptSimple(String msg, String enckey);
-void mesh_gw_setup();
 void onReceive(const uint8_t *mac, const uint8_t *incomingData, int len);
+void mesh_gw_setup();
 //============================================================================//
 
+// Helper for Serial Monitor
+const char* getTypeName(message_type_t type) {
+    switch(type) {
+        case MSG_CMD: return "Command";
+        case MSG_ACK: return "Acknowledgement";
+        case MSG_HB:  return "Heartbeat";
+        case MSG_SD: return "Sensor Data";
+        default:      return "Unknown";
+    }
+}
+
+// ================= MESSAGE ID =================
+String generateMessageID() {
+    uint16_t randNum = esp_random() & 0xFFFF;
+    char id[5];
+    sprintf(id, "%04X", randNum);
+    return String(id);
+}
+
+// ================= DEDUP =================
 bool isDuplicate(const String& sender, const String& msg_id) {
     String key = sender + ":" + msg_id;
 
@@ -68,19 +84,7 @@ bool isDuplicate(const String& sender, const String& msg_id) {
     return false;
 }
 
-// ================= MESSAGE ID =================
-String generateMessageID() {
-    uint16_t randNum = esp_random() & 0xFFFF;
-    char id[5];
-    sprintf(id, "%04X", randNum);
-    return String(id);
-}
-
 // ================= ENCRYPTION =================
-bool useEncryption = false;
-String enckey = "dmabd987";
-String encCharset = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+=[]{}|:;<>?,./~";
-
 String encryptSimple(String msg, String enckey)
 {
     String out = "";
@@ -103,6 +107,7 @@ String encryptSimple(String msg, String enckey)
     return out;
 }
 
+//================= DECRYPTION =================
 String decryptSimple(String msg, String enckey)
 {
     String out = "";
@@ -165,6 +170,9 @@ void onReceive(const uint8_t *mac, const uint8_t *incomingData, int len) {
     String last_hop = msg.substring(commas[4] + 1, commas[5]);
     uint8_t hop_count = msg.substring(commas[5] + 1).toInt();
 
+    Serial.println("Raw Type: " + String(type));
+    Serial.println("Type: " + String(getTypeName(type)));
+
     if(type == MSG_CMD) {
         // Process command
         Serial.println("⚙️ Processing command: " + command);
@@ -225,6 +233,7 @@ void onReceive(const uint8_t *mac, const uint8_t *incomingData, int len) {
                     last_hop.c_str());
 }
 
+// ================= SETUP =================
 void mesh_gw_setup(){
     WiFi.mode(WIFI_STA);
     WiFi.disconnect();
