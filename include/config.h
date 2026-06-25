@@ -8,7 +8,7 @@
 #include <esp_task_wdt.h>
 
 // ==================== Configuration ====================
-#define OTA 0  // Set to 1 for OTA mode, 0 for normal mode
+#define OTA 1  // Set to 1 for OTA mode, 0 for normal mode
 #define HW_VERSION "3.1"
 #define FW_VERSION "V1.104"
 #define OTA_DATE "260513"
@@ -93,3 +93,8 @@ String getMACDeviceID() {
             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
     return String(macStr);
 }
+
+#define DEBUG_MODE true
+#define DEBUG_PRINT(x)  if (DEBUG_MODE) { Serial.print(x); }
+#define DEBUG_PRINTF(x) if (DEBUG_MODE) { Serial.printf(x); }
+#define DEBUG_PRINTLN(x) if (DEBUG_MODE) { Serial.println(x); }

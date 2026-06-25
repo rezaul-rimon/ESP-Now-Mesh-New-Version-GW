@@ -9,15 +9,24 @@
 const char* Local_ID = "gw0";
 uint8_t broadcastAddress[] = {0xFF,0xFF,0xFF,0xFF,0xFF,0xFF};
 
+//========= ESP Now on Receive Que Size========
+#define ESPNOW_MAX_MSG_LEN 80
+#define MAX_FWDS 1000
+
 // ================= DEDUP =================
-std::deque<String> recentMsgKeys;
+struct MsgKey {
+    char sender[10];
+    uint8_t type;
+    char msg_id[6];
+};
+
+std::deque<MsgKey> recentMsgKeys;
 const size_t maxRecentIDs = 200; // Can be made configurable via Preferences
 
 // ================= ENCRYPTION =================
 bool useEncryption = false;
 String enckey = "dmabd987";
 String encCharset = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+=[]{}|:;<>?,./~";
-
 
 // ================= ENUM =================
 typedef enum {
@@ -26,7 +35,6 @@ typedef enum {
     MSG_HB,
     MSG_SD
 } message_type_t;
-
 
 // ================= MESSAGE =================
 struct Message {
@@ -39,17 +47,30 @@ struct Message {
     uint8_t hop_count;
 };
 
+struct EspNowRxMessage {
+    int len;
+    char data[ESPNOW_MAX_MSG_LEN + 1];
+};
+
+// ================= QUEUE AND TASK HANDLES =================
+TaskHandle_t EspNowOnReceiveTaskHandle = NULL;
+QueueHandle_t espNowRxQueue = NULL;
+#define ONRECEIVE_TASK_STACK 16 * 1024
+#define ONRECEIVE_TASK_PRIORITY 2
+
+
 //==================Function Prototypes==================
 const char* getTypeName(message_type_t type);
 String generateMessageID();
-bool isDuplicate(const String& sender, const String& msg_id);
+bool isDuplicate(const char* sender, message_type_t type, const char* msg_id);
 String encryptSimple(String msg, String enckey);
 String decryptSimple(String msg, String enckey);
-void onReceive(const uint8_t *mac, const uint8_t *incomingData, int len);
+void onReceive(const uint8_t *mac, const uint8_t *data, int len);
 void mesh_gw_setup();
+void EspNowOnReceiveTask(void *pvParameters);
 //============================================================================//
 
-// Helper for Serial Monitor
+//======= Helper for Serial Monitor ========
 const char* getTypeName(message_type_t type) {
     switch(type) {
         case MSG_CMD: return "Command";
@@ -60,7 +81,7 @@ const char* getTypeName(message_type_t type) {
     }
 }
 
-// ================= MESSAGE ID =================
+// =========== UNIQUE MESSAGE ID ==========
 String generateMessageID() {
     uint16_t randNum = esp_random() & 0xFFFF;
     char id[5];
@@ -69,20 +90,42 @@ String generateMessageID() {
 }
 
 // ================= DEDUP =================
-bool isDuplicate(const String& sender, const String& msg_id) {
-    String key = sender + ":" + msg_id;
+bool isDuplicate(const char* sender, message_type_t type, const char* msg_id) {
+    MsgKey key;
 
-    if (std::find(recentMsgKeys.begin(), recentMsgKeys.end(), key) != recentMsgKeys.end()) {
-        return true;
+    strncpy(key.sender, sender, sizeof(key.sender));
+    key.sender[sizeof(key.sender) - 1] = '\0';
+
+    key.type = type;
+
+    strncpy(key.msg_id, msg_id, sizeof(key.msg_id));
+    key.msg_id[sizeof(key.msg_id) - 1] = '\0';
+
+    // search in deque
+    for (auto &k : recentMsgKeys)
+    {
+        if (
+            strcmp(k.sender, key.sender) == 0 &&
+            k.type == key.type &&
+            strcmp(k.msg_id, key.msg_id) == 0
+        )
+        {
+            DEBUG_PRINTLN("Duplicate: " + String(k.sender) +":"+ String(k.type) +":"+ String(k.msg_id));
+            return true;
+        }
     }
 
+    // insert new
     recentMsgKeys.push_back(key);
-    if (recentMsgKeys.size() > maxRecentIDs) {
+
+    if (recentMsgKeys.size() > maxRecentIDs)
+    {
         recentMsgKeys.pop_front();
     }
 
     return false;
 }
+
 
 // ================= ENCRYPTION =================
 String encryptSimple(String msg, String enckey)
@@ -134,103 +177,37 @@ String decryptSimple(String msg, String enckey)
     return out;
 }
 
-// ================= RECEIVE CALLBACK =================
-void onReceive(const uint8_t *mac, const uint8_t *incomingData, int len) {
-    String rawMsg((char*)incomingData, len);
-    // Serial.println("\n📥 Received: " + rawMsg);
-
-    // Expected:
-    // sender,receiver,command,type,msg_id,last_hop,hop_count
-
-    String msg;
-    if(useEncryption) {
-        msg = decryptSimple(rawMsg, enckey);
-    } else {
-        msg = rawMsg;
-    }
-
-    int commas[6];
-    int idx = -1;
-
-    for (int i = 0; i < 6; i++) {
-        idx = msg.indexOf(',', idx + 1);
-        if (idx < 0) {
-            // Serial.println("❌ Invalid format");
-            return;
-        }
-        commas[i] = idx;
-    }
-    Serial.println("📥 Message: " + msg);
-
-    String sender   = msg.substring(0, commas[0]);
-    String receiver = msg.substring(commas[0] + 1, commas[1]);
-    String command  = msg.substring(commas[1] + 1, commas[2]);
-    message_type_t type = (message_type_t) msg.substring(commas[2] + 1, commas[3]).toInt();
-    String msg_id   = msg.substring(commas[3] + 1, commas[4]);
-    String last_hop = msg.substring(commas[4] + 1, commas[5]);
-    uint8_t hop_count = msg.substring(commas[5] + 1).toInt();
-
-    Serial.println("Raw Type: " + String(type));
-    Serial.println("Type: " + String(getTypeName(type)));
-
-    if(type == MSG_CMD) {
-        // Process command
-        Serial.println("⚙️ Processing command: " + command);
-        Serial.println("GW Should not executr commands");
-        sendLedCommand(LED_RF_CMD);
+// ================= ESP-NOW ON RECEIVE CALLBACK =================
+void onReceive(const uint8_t *mac, const uint8_t *data, int len) {
+    // 1. Basic validation
+    if (len <= 0 || len > ESPNOW_MAX_MSG_LEN){
+        DEBUG_PRINTLN("⚠️ Packet length Exceeded: " + String(len));
         return;
     }
 
-    // Dedup
-    if (isDuplicate(sender, msg_id)) {
-        Serial.println("⚠️ Duplicate ignored");
-        return;
-    }
-    
-    if(type == MSG_HB) {
-        Serial.println("💓 Heartbeat from " + sender);
-        MQTTMessage hbMsg;
-        strcpy(hbMsg.topic, MQTT_LP_NODE_HB);
-        snprintf(hbMsg.payload, sizeof(hbMsg.payload), "%s,%s,%s", DEVICE_ID.c_str(), sender.c_str(), command.c_str());
-        if (xQueueSend(mqttPublishQueue, &hbMsg, pdMS_TO_TICKS(100)) == pdTRUE) {
-            SerialMon.println("MainTask: Node Heartbeat queued");
-        }
-        sendLedCommand(LED_RF_HB);
-        return;
-    }
+    EspNowRxMessage msg;
 
-    if(type == MSG_SD) {
-        Serial.println("🌡️ Sensor Data from " + sender + ": " + command);
-        MQTTMessage sdMsg;
-        strcpy(sdMsg.topic, MQTT_LP_NODE_SD);
-        snprintf(sdMsg.payload, sizeof(sdMsg.payload), "%s,%s,%s", DEVICE_ID.c_str(), sender.c_str(), command.c_str());
-        if (xQueueSend(mqttPublishQueue, &sdMsg, pdMS_TO_TICKS(100)) == pdTRUE) {
-            SerialMon.println("MainTask: Node Sensor Data queued");
-        }
-        sendLedCommand(LED_RF_HB);
-        return;
-    }
+    // 2. Copy payload safely
+    msg.len = len;
+    memcpy(msg.data, data, len);
 
-    if(type == MSG_ACK) {
-        Serial.println("✅ ACK from " + sender + ": " + command);
-        MQTTMessage ackMsg;
-        strcpy(ackMsg.topic, MQTT_LP_NODE_ACK);
-        snprintf(ackMsg.payload, sizeof(ackMsg.payload), "%s,%s,%s", DEVICE_ID.c_str(), sender.c_str(), command.c_str());
-        if (xQueueSend(mqttPublishQueue, &ackMsg, pdMS_TO_TICKS(100)) == pdTRUE) {
-            SerialMon.println("MainTask: Node ACK queued");
-        }
-        sendLedCommand(LED_RF_ACK);
-        return;
-    }
+    // 3. Null terminate safely (IMPORTANT)
+    msg.data[len] = '\0';
 
-    Serial.printf("✅ %s | From:%s → To:%s | CMD:%s | ID:%s | Hop:%d | Last:%s\n",
-                    getTypeName(type),
-                    sender.c_str(),
-                    receiver.c_str(),
-                    command.c_str(),
-                    msg_id.c_str(),
-                    hop_count,
-                    last_hop.c_str());
+    // 4. Send to queue (ISR-safe)
+    BaseType_t ok;
+
+    ok = xQueueSendFromISR(
+        espNowRxQueue,
+        &msg,
+        NULL
+    );
+
+    // 5. Optional debug (only if needed)
+    if (ok != pdTRUE)
+    {
+        DEBUG_PRINTLN("⚠️ Queue Overflow: Failed to enqueue received message");
+    }
 }
 
 // ================= SETUP =================
@@ -243,6 +220,26 @@ void mesh_gw_setup(){
         return;
     }
 
+    espNowRxQueue = xQueueCreate(
+        MAX_FWDS,
+        sizeof(EspNowRxMessage)
+    );
+
+    if(espNowRxQueue == NULL)
+    {
+        DEBUG_PRINTLN("RX Queue Create Failed");
+    }
+
+    xTaskCreatePinnedToCore(
+        EspNowOnReceiveTask,
+        "EspNowRx",
+        ONRECEIVE_TASK_STACK,
+        NULL,
+        ONRECEIVE_TASK_PRIORITY,
+        &EspNowOnReceiveTaskHandle,
+        1
+    );
+
     esp_now_peer_info_t peerInfo = {};
     memcpy(peerInfo.peer_addr, broadcastAddress, 6);
     peerInfo.channel = 0;
@@ -250,4 +247,203 @@ void mesh_gw_setup(){
     esp_now_add_peer(&peerInfo);
 
     esp_now_register_recv_cb(onReceive);
+}
+
+//============= ESP-NOW ON RECEIVE MESSAGE HANDLE TASK ===========
+void EspNowOnReceiveTask(void *pvParameters) {
+    EspNowRxMessage rxMsg;
+
+    while(true)
+    {
+        if(
+            xQueueReceive(
+                espNowRxQueue,
+                &rxMsg,
+                portMAX_DELAY
+            ) == pdTRUE
+        ) {
+            //Start processing the received message
+            // String msg = String(rxMsg.data);
+            char msg[ESPNOW_MAX_MSG_LEN + 1];
+
+            int len = rxMsg.len;
+            if (len > ESPNOW_MAX_MSG_LEN) len = ESPNOW_MAX_MSG_LEN;
+
+            memcpy(msg, rxMsg.data, len);
+            msg[len] = '\0';
+
+            // Expect 7 fields (6 commas)
+            // int commas = std::count(msg.begin(), msg.end(), ',');
+            int commas = 0;
+
+            for(int i = 0; msg[i] != '\0'; i++)
+            {
+                if(msg[i] == ',')
+                    commas++;
+            }
+
+            if (commas != 6) {
+                DEBUG_PRINTLN("❌ Invalid packet");
+                continue;
+            }
+            DEBUG_PRINTLN();
+            DEBUG_PRINTLN("============================================");
+            DEBUG_PRINT("📥 Received from Queue:");
+            DEBUG_PRINTLN(rxMsg.data);
+            DEBUG_PRINTLN("============================================");
+            DEBUG_PRINTLN();
+
+            char *saveptr;
+
+            char *sender =
+                strtok_r(msg, ",", &saveptr);
+
+            char *receiver =
+                strtok_r(NULL, ",", &saveptr);
+
+            char *command =
+                strtok_r(NULL, ",", &saveptr);
+
+            char *typeStr =
+                strtok_r(NULL, ",", &saveptr);
+
+            char *msg_id =
+                strtok_r(NULL, ",", &saveptr);
+
+            char *last_hop =
+                strtok_r(NULL, ",", &saveptr);
+
+            char *hopStr =
+                strtok_r(NULL, ",", &saveptr);
+
+            if(
+                sender == NULL ||
+                receiver == NULL ||
+                command == NULL ||
+                typeStr == NULL ||
+                msg_id == NULL ||
+                last_hop == NULL ||
+                hopStr == NULL
+            )
+            {
+                DEBUG_PRINTLN("❌ Invalid packet");
+                continue;
+            }
+
+            sender[strcspn(sender, "\r\n\t ")] = 0;
+            receiver[strcspn(receiver, "\r\n\t ")] = 0;
+            command[strcspn(command, "\r\n\t ")] = 0;
+            msg_id[strcspn(msg_id, "\r\n\t ")] = 0;
+            last_hop[strcspn(last_hop, "\r\n\t ")] = 0;
+            typeStr[strcspn(typeStr, "\r\n\t ")] = 0;
+            hopStr[strcspn(hopStr, "\r\n\t ")] = 0;
+
+            message_type_t type = (message_type_t)atoi(typeStr);
+
+            int hop_count = atoi(hopStr);
+
+            // DEBUG_PRINTLN("Sender: " + String(sender));
+            // DEBUG_PRINTLN("Receiver: " + String(receiver));
+            // DEBUG_PRINTLN("Command: " + String(command));
+            // DEBUG_PRINTLN("Msg_ID: " + String(msg_id));
+            // DEBUG_PRINTLN("Last Hop: " + String(last_hop));
+            // DEBUG_PRINT("Raw type: " + String(type));
+            // DEBUG_PRINTLN(" | Type: " + String(getTypeName(type)));
+            // DEBUG_PRINTLN("Hop Count: " + String(hop_count));
+
+            
+            if(type == MSG_CMD) {
+                // Process command
+                Serial.print("⚙️ Processing command: ");
+                Serial.println(command);
+                Serial.println("GW Should not executr commands");
+                sendLedCommand(LED_RF_CMD);
+                continue;
+            }
+
+            // Dedup
+            if (isDuplicate(sender, type, msg_id)) {
+                Serial.println("⚠️ Duplicate ignored");
+                continue;
+            }
+            
+            if(type == MSG_HB) {
+                // Serial.println("💓 Heartbeat from " + sender);
+                MQTTMessage hbMsg;
+                strcpy(hbMsg.topic, MQTT_LP_NODE_HB);
+                snprintf(
+                    hbMsg.payload,
+                    sizeof(hbMsg.payload),
+                    "%s,%s,%s",
+                    DEVICE_ID.c_str(),   // keep if DEVICE_ID is still String
+                    sender,
+                    command
+                );
+                if (xQueueSend(mqttPublishQueue, &hbMsg, pdMS_TO_TICKS(100)) == pdTRUE) {
+                    SerialMon.println("MainTask: Node Heartbeat queued");
+                }
+                sendLedCommand(LED_RF_HB);
+                continue;
+            }
+
+            if(type == MSG_SD) {
+                Serial.print("🌡️ Sensor Data from ");
+                Serial.print(sender);
+                Serial.print(": ");
+                Serial.println(command);
+                MQTTMessage sdMsg;
+                strcpy(sdMsg.topic, MQTT_LP_NODE_SD);
+                snprintf(
+                    sdMsg.payload,
+                    sizeof(sdMsg.payload),
+                    "%s,%s,%s",
+                    DEVICE_ID.c_str(),
+                    sender,
+                    command
+                );
+                if (xQueueSend(mqttPublishQueue, &sdMsg, pdMS_TO_TICKS(100)) == pdTRUE) {
+                    SerialMon.println("MainTask: Node Sensor Data queued");
+                }
+                sendLedCommand(LED_RF_HB);
+                continue;
+            }
+
+            if(type == MSG_ACK) {
+                Serial.print("✅ ACK from ");
+                Serial.print(sender);
+                Serial.print(": ");
+                Serial.println(command);
+                MQTTMessage ackMsg;
+                strcpy(ackMsg.topic, MQTT_LP_NODE_ACK);
+                snprintf(
+                    ackMsg.payload,
+                    sizeof(ackMsg.payload),
+                    "%s,%s,%s",
+                    DEVICE_ID.c_str(),
+                    sender,
+                    command
+                );
+                if (xQueueSend(mqttPublishQueue, &ackMsg, pdMS_TO_TICKS(100)) == pdTRUE) {
+                    SerialMon.println("MainTask: Node ACK queued");
+                }
+                sendLedCommand(LED_RF_ACK);
+                continue;
+            }
+
+            Serial.printf(
+                "✅ %s | From:%s -> To:%s | CMD:%s | ID:%s | Hop:%d | Last:%s\n",
+                getTypeName(type),
+                sender,
+                receiver,
+                command,
+                msg_id,
+                hop_count,
+                last_hop
+            );
+
+            
+            // sendLedCommand(LED_PING_ACK);
+            // vTaskDelay(10 / portTICK_PERIOD_MS);
+        }
+    }
 }
