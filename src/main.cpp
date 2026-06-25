@@ -12,7 +12,7 @@ TaskHandle_t mainTaskHandle = NULL;
 #define MAIN_TASK_STACK 4096
 
 // Queue sizes
-#define MQTT_PUB_QUEUE_SIZE 20
+#define MQTT_PUB_QUEUE_SIZE 200
 
 //Function prototypes
 void mainTask(void* parameter);
@@ -324,34 +324,109 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
         return;
     }
 
-    Message msg;
-    msg.sender_id = Local_ID;
-    msg.receiver_id = message.substring(0, commaIndex);
-    msg.command = message.substring(commaIndex + 1);
-    msg.type = MSG_CMD;
-    msg.msg_id = generateMessageID();
-    msg.last_hop = Local_ID;
-    msg.hop_count = 0;
+    // Message msg;
+    // msg.sender_id = Local_ID;
+    // msg.receiver_id = message.substring(0, commaIndex);
+    // msg.command = message.substring(commaIndex + 1);
+    // msg.type = MSG_CMD;
+    // msg.msg_id = generateMessageID();
+    // msg.last_hop = Local_ID;
+    // msg.hop_count = 0;
 
-    String nodePayload =
-        msg.sender_id + "," +
-        msg.receiver_id + "," +
-        msg.command + "," +
-        String(msg.type) + "," +
-        msg.msg_id + "," +
-        msg.last_hop + "," +
-        String(msg.hop_count);
+    // String nodePayload =
+    //     msg.sender_id + "," +
+    //     msg.receiver_id + "," +
+    //     msg.command + "," +
+    //     String(msg.type) + "," +
+    //     msg.msg_id + "," +
+    //     msg.last_hop + "," +
+    //     String(msg.hop_count);
     
-    if(useEncryption) {
+    // if(useEncryption) {
+    //     SerialMon.println("🔐 Encrypting...");
+    //     String encPayload = encryptSimple(nodePayload, enckey);
+    //     SerialMon.println("📤 CMD Sent: " + encPayload);
+    //     esp_now_send(broadcastAddress, (uint8_t*)encPayload.c_str(), encPayload.length());
+    //     SerialMon.println("📤 CMD Sent: " + decryptSimple(encPayload, enckey));
+    // } else {
+    //     SerialMon.println("⚠️ Sending without encryption!");
+    //     SerialMon.println("📤 CMD Sent: " + nodePayload);
+    //     esp_now_send(broadcastAddress, (uint8_t*)nodePayload.c_str(), nodePayload.length());
+    // }
+
+    char receiver[16];
+    char command[64];
+
+    // Parse incoming MQTT message
+    strncpy(
+        receiver,
+        message.substring(0, commaIndex).c_str(),
+        sizeof(receiver) - 1
+    );
+    receiver[sizeof(receiver) - 1] = '\0';
+
+    strncpy(
+        command,
+        message.substring(commaIndex + 1).c_str(),
+        sizeof(command) - 1
+    );
+    command[sizeof(command) - 1] = '\0';
+
+    command[strcspn(command, "\r\n")] = 0;
+    receiver[strcspn(receiver, "\r\n")] = 0;
+
+    // Generate message ID
+    String msg_id = generateMessageID();
+
+    // Build mesh packet
+    char nodePayload[ESPNOW_MAX_MSG_LEN + 1];
+
+    snprintf(
+        nodePayload,
+        sizeof(nodePayload),
+        "%s,%s,%s,%d,%s,%s,%d",
+        Local_ID,
+        receiver,
+        command,
+        MSG_CMD,
+        msg_id.c_str(),
+        Local_ID,
+        0
+    );
+
+    SerialMon.print("RAW Payload: ");
+    SerialMon.println(nodePayload);
+
+    if (useEncryption)
+    {
         SerialMon.println("🔐 Encrypting...");
-        String encPayload = encryptSimple(nodePayload, enckey);
-        SerialMon.println("📤 CMD Sent: " + encPayload);
-        esp_now_send(broadcastAddress, (uint8_t*)encPayload.c_str(), encPayload.length());
-        SerialMon.println("📤 CMD Sent: " + decryptSimple(encPayload, enckey));
-    } else {
+
+        char encPayload[ESPNOW_MAX_MSG_LEN + 1];
+
+        encryptSimple(
+            nodePayload,
+            encPayload,
+            enckey
+        );
+
+        SerialMon.print("Encrypted: ");
+        SerialMon.println(encPayload);
+
+        esp_now_send(
+            broadcastAddress,
+            (uint8_t*)encPayload,
+            strlen(encPayload)
+        );
+    }
+    else
+    {
         SerialMon.println("⚠️ Sending without encryption!");
-        SerialMon.println("📤 CMD Sent: " + nodePayload);
-        esp_now_send(broadcastAddress, (uint8_t*)nodePayload.c_str(), nodePayload.length());
+
+        esp_now_send(
+            broadcastAddress,
+            (uint8_t*)nodePayload,
+            strlen(nodePayload)
+        );
     }
     
 }

@@ -24,9 +24,13 @@ std::deque<MsgKey> recentMsgKeys;
 const size_t maxRecentIDs = 200; // Can be made configurable via Preferences
 
 // ================= ENCRYPTION =================
+// bool useEncryption = false;
+// String enckey = "dmabd987";
+// String encCharset = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+=[]{}|:;<>?,./~";
+
 bool useEncryption = false;
-String enckey = "dmabd987";
-String encCharset = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+=[]{}|:;<>?,./~";
+const char enckey[] = "dmabd987";
+const char encCharset[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+=[]{}|:;<>?,./~";
 
 // ================= ENUM =================
 typedef enum {
@@ -37,13 +41,23 @@ typedef enum {
 } message_type_t;
 
 // ================= MESSAGE =================
+// struct Message {
+//     String sender_id;
+//     String receiver_id;
+//     String command;
+//     message_type_t type;
+//     String msg_id;
+//     String last_hop;
+//     uint8_t hop_count;
+// };
+
 struct Message {
-    String sender_id;
-    String receiver_id;
-    String command;
-    message_type_t type;
-    String msg_id;
-    String last_hop;
+    char sender_id[10];
+    char receiver_id[10];
+    char command[40];
+    uint8_t type;
+    char msg_id[6];
+    char last_hop[10];
     uint8_t hop_count;
 };
 
@@ -63,8 +77,8 @@ QueueHandle_t espNowRxQueue = NULL;
 const char* getTypeName(message_type_t type);
 String generateMessageID();
 bool isDuplicate(const char* sender, message_type_t type, const char* msg_id);
-String encryptSimple(String msg, String enckey);
-String decryptSimple(String msg, String enckey);
+void encryptSimple(const char* msg, char* out, const char* enckey);
+void decryptSimple(const char* msg, char* out, const char* enckey);
 void onReceive(const uint8_t *mac, const uint8_t *data, int len);
 void mesh_gw_setup();
 void EspNowOnReceiveTask(void *pvParameters);
@@ -128,6 +142,7 @@ bool isDuplicate(const char* sender, message_type_t type, const char* msg_id) {
 
 
 // ================= ENCRYPTION =================
+/*
 String encryptSimple(String msg, String enckey)
 {
     String out = "";
@@ -175,6 +190,80 @@ String decryptSimple(String msg, String enckey)
     }
 
     return out;
+}
+*/
+//================= ENCRYPTION FUNCTIONS =================
+void encryptSimple(const char* msg, char* out, const char* enckey) {
+    int msgLen = strlen(msg);
+    int keyLen = strlen(enckey);
+    int charsetLen = strlen(encCharset);
+
+    for (int i = 0; i < msgLen; i++)
+    {
+        char c = msg[i];
+        int index = -1;
+
+        // find char in charset
+        for (int j = 0; j < charsetLen; j++)
+        {
+            if (encCharset[j] == c)
+            {
+                index = j;
+                break;
+            }
+        }
+
+        if (index == -1)
+        {
+            out[i] = c;   // keep delimiters
+            continue;
+        }
+
+        int shift = enckey[i % keyLen] + i;
+        int newIndex = (index + shift) % charsetLen;
+
+        out[i] = encCharset[newIndex];
+    }
+
+    out[msgLen] = '\0';
+}
+
+//================= DECRYPTION FUNCTIONS =================
+void decryptSimple(const char* msg, char* out, const char* enckey) {
+    int msgLen = strlen(msg);
+    int keyLen = strlen(enckey);
+    int charsetLen = strlen(encCharset);
+
+    for (int i = 0; i < msgLen; i++)
+    {
+        char c = msg[i];
+        int index = -1;
+
+        for (int j = 0; j < charsetLen; j++)
+        {
+            if (encCharset[j] == c)
+            {
+                index = j;
+                break;
+            }
+        }
+
+        if (index == -1)
+        {
+            out[i] = c;
+            continue;
+        }
+
+        int shift = enckey[i % keyLen] + i;
+        int newIndex = index - shift;
+
+        while (newIndex < 0)
+            newIndex += charsetLen;
+
+        out[i] = encCharset[newIndex];
+    }
+
+    out[msgLen] = '\0';
 }
 
 // ================= ESP-NOW ON RECEIVE CALLBACK =================
@@ -284,6 +373,7 @@ void EspNowOnReceiveTask(void *pvParameters) {
 
             if (commas != 6) {
                 DEBUG_PRINTLN("❌ Invalid packet");
+                DEBUG_PRINTLN(rxMsg.data);
                 continue;
             }
             DEBUG_PRINTLN();
@@ -327,6 +417,7 @@ void EspNowOnReceiveTask(void *pvParameters) {
             )
             {
                 DEBUG_PRINTLN("❌ Invalid packet");
+                DEBUG_PRINTLN(rxMsg.data);
                 continue;
             }
 
