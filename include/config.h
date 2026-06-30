@@ -10,8 +10,8 @@
 // ==================== Configuration ====================
 #define OTA 1  // Set to 1 for OTA mode, 0 for normal mode
 #define HW_VERSION "3.1"
-#define FW_VERSION "V1.104"
-#define OTA_DATE "260513"
+#define FW_VERSION "V3.262.2"
+#define OTA_DATE "260701"
 
 #define USE_LDR_SENSOR
 // #define USE_GY30
