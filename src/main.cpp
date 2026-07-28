@@ -7,10 +7,8 @@ TaskHandle_t mainTaskHandle = NULL;
 
 // Main Task priorities
 #define MAIN_TASK_PRIORITY 2
-
 // Main Task stack sizes
 #define MAIN_TASK_STACK 4096
-
 // Queue sizes
 #define MQTT_PUB_QUEUE_SIZE 200
 
@@ -25,7 +23,7 @@ void setup() {
     delay(100);
 
     SerialMon.println("\n====================================");
-    SerialMon.println("  ==    DMA IoT Lamp-Post GATEWAY    ==");
+    SerialMon.println(" ========   DMA BLE GATEWAY    =======");
     SerialMon.println("--------------------------------------");
     SerialMon.printf ("  ==      FW Version: %s        ==", FW_VERSION);
     SerialMon.println();
@@ -72,13 +70,6 @@ void setup() {
     // maxRecentIDs = preferences.getInt("dedup_size", 250);
     // SerialMon.println("Deduplication Size: " + String(maxRecentIDs));
     preferences.end();
-
-    // ---- LDR SENSOR SETUP ----
-    #ifdef USE_LDR_SENSOR
-        Serial.println("🔄 Initializing LDR Sensor...");
-        pinMode(LDR_PIN, INPUT);
-        Serial.println("\n✅ LDR Sensor Test");
-    #endif
 
     GSM_setup();
 
@@ -330,36 +321,6 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
         return;
     }
 
-    // Message msg;
-    // msg.sender_id = Local_ID;
-    // msg.receiver_id = message.substring(0, commaIndex);
-    // msg.command = message.substring(commaIndex + 1);
-    // msg.type = MSG_CMD;
-    // msg.msg_id = generateMessageID();
-    // msg.last_hop = Local_ID;
-    // msg.hop_count = 0;
-
-    // String nodePayload =
-    //     msg.sender_id + "," +
-    //     msg.receiver_id + "," +
-    //     msg.command + "," +
-    //     String(msg.type) + "," +
-    //     msg.msg_id + "," +
-    //     msg.last_hop + "," +
-    //     String(msg.hop_count);
-    
-    // if(useEncryption) {
-    //     SerialMon.println("🔐 Encrypting...");
-    //     String encPayload = encryptSimple(nodePayload, enckey);
-    //     SerialMon.println("📤 CMD Sent: " + encPayload);
-    //     esp_now_send(broadcastAddress, (uint8_t*)encPayload.c_str(), encPayload.length());
-    //     SerialMon.println("📤 CMD Sent: " + decryptSimple(encPayload, enckey));
-    // } else {
-    //     SerialMon.println("⚠️ Sending without encryption!");
-    //     SerialMon.println("📤 CMD Sent: " + nodePayload);
-    //     esp_now_send(broadcastAddress, (uint8_t*)nodePayload.c_str(), nodePayload.length());
-    // }
-
     char receiver[16];
     char command[64];
 
@@ -403,8 +364,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     SerialMon.print("RAW Payload: ");
     SerialMon.println(nodePayload);
 
-    if (useEncryption)
-    {
+    if (useEncryption) {
         SerialMon.println("🔐 Encrypting...");
 
         char encPayload[ESPNOW_MAX_MSG_LEN + 1];
@@ -424,8 +384,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
             strlen(encPayload)
         );
     }
-    else
-    {
+    else {
         SerialMon.println("⚠️ Sending without encryption!");
 
         esp_now_send(
@@ -500,42 +459,11 @@ void publishHeartbeat() {
 #endif
 
 void publishData(){
-  
-    float lux = -1;
-    // Read LDR value and convert to Lux
-    #ifdef USE_LDR_SENSOR
-        Serial.print("LDR Value: ");
-        int ldrValue = analogRead(LDR_PIN);
-        // ldrValue = map(ldrValue, 0, 4095, 4095, 0); // Invert reading
-        Serial.print(ldrValue);
-        Serial.println();
-
-        lux = ldrToLux(ldrValue);
-        // lux = lux * 1.45; // Calibration factor
-        Serial.print("Calculated Lux: ");
-        Serial.print(lux, 2);
-        Serial.println(" lx");
-    #endif
-    //========================================//
-
-    // Get light level from BH1750
-    #ifdef USE_GY30
-        
-        if (lightMeter.measurementReady()) {
-        lux = lightMeter.readLightLevel();
-        Serial.print("BH1750 Light Level: ");
-        Serial.print(lux, 2);
-        Serial.println(" lx");
-        } else {
-        Serial.println("BH1750 Measurement not ready");
-        }
-    #endif
-    //========================================//
-
+    
     // Prepare and send MQTT data message
     MQTTMessage dataMsg;
     snprintf(dataMsg.topic, sizeof(dataMsg.topic), "%s", MQTT_LP_PUB);
-    String payload = String(DEVICE_ID) + ",LUX:" + (lux >= 0 ? String(lux, 2) : "ERROR");
+    String payload = String(DEVICE_ID) + ",I am Data";
     snprintf(dataMsg.payload, sizeof(dataMsg.payload), "%s", payload.c_str());
     
     if (xQueueSend(mqttPublishQueue, &dataMsg, pdMS_TO_TICKS(100)) == pdTRUE) {

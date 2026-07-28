@@ -13,14 +13,6 @@
 #define FW_VERSION "V3.262.2"
 #define OTA_DATE "260701"
 
-#define USE_LDR_SENSOR
-// #define USE_GY30
-
-// Sensor configuration
-#ifdef USE_LDR_SENSOR
-    #define LDR_PIN 39 // Pin for LDR sensor
-#endif
-
 #define WORK_PACKAGE "1225"
 #define DEVICE_TYPE "03"
 #define DEVICE_CODE_UPLOAD_DATE "260121"
@@ -45,8 +37,6 @@ String MAC_FALLBACK_ID = "";
 #define MODEM_PWR 15
 #define ACLINE_PIN 34
 
-#define ON HIGH
-#define OFF LOW
 
 // Timing Configuration
 const unsigned long DATA_INTERVAL = 5 * 60000UL;  // 1 minute
@@ -69,14 +59,15 @@ bool modemWasInitialized = false;
 
 
 // ==================== Global Variables ====================
-const char* MQTT_LP_HB = "DMA-LP/GW/HB";
-const char* MQTT_LP_PUB = "DMA-LP/GW/PUB";
-const char* MQTT_LP_SUB = "DMA-LP/GW/SUB/";
-const char* MQTT_LP_ACK = "DMA-LP/GW/ACK";
+const char* MQTT_LP_HB = "DMA-BLE/GW/HB";
+const char* MQTT_LP_PUB = "DMA-BLE/GW/PUB";
+const char* MQTT_LP_SUB = "DMA-BLE/GW/SUB/";
+const char* MQTT_LP_ACK = "DMA-BLE/GW/ACK";
 
-const char* MQTT_LP_NODE_HB = "DMA-LP/NODE/HB";
-const char* MQTT_LP_NODE_SD = "DMA-LP/NODE/SD";
-const char* MQTT_LP_NODE_ACK = "DMA-LP/NODE/ACK";
+const char* MQTT_LP_NODE_HB = "DMA-BLE/NODE/HB";
+const char* MQTT_LP_NODE_SD = "DMA-BLE/NODE/SD";
+const char* MQTT_LP_NODE_ACK = "DMA-BLE/NODE/ACK";
+
 struct MQTTMessage {
     char topic[64];
     char payload[128];
