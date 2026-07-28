@@ -216,6 +216,12 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
         return;
     }
 
+    if(message == "data"){
+        SerialMon.println("MQTT Command: Data Request received");
+        publishData();
+        return;
+    }
+
     if(message == "get_sim_info"){
         String operatorCode = modem.getOperator();
         String operatorName = operatorCode;
@@ -500,7 +506,7 @@ void publishData(){
     #ifdef USE_LDR_SENSOR
         Serial.print("LDR Value: ");
         int ldrValue = analogRead(LDR_PIN);
-        ldrValue = map(ldrValue, 0, 4095, 4095, 0); // Invert reading
+        // ldrValue = map(ldrValue, 0, 4095, 4095, 0); // Invert reading
         Serial.print(ldrValue);
         Serial.println();
 
