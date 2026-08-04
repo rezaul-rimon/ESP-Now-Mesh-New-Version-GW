@@ -23,11 +23,6 @@ struct MsgKey {
 std::deque<MsgKey> recentMsgKeys;
 const size_t maxRecentIDs = 200; // Can be made configurable via Preferences
 
-// ================= ENCRYPTION =================
-// bool useEncryption = false;
-// String enckey = "dmabd987";
-// String encCharset = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+=[]{}|:;<>?,./~";
-
 bool useEncryption = false;
 const char enckey[] = "dmabd987";
 const char encCharset[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+=[]{}|:;<>?,./~";
@@ -39,17 +34,6 @@ typedef enum {
     MSG_HB,
     MSG_SD
 } message_type_t;
-
-// ================= MESSAGE =================
-// struct Message {
-//     String sender_id;
-//     String receiver_id;
-//     String command;
-//     message_type_t type;
-//     String msg_id;
-//     String last_hop;
-//     uint8_t hop_count;
-// };
 
 struct Message {
     char sender_id[10];
@@ -140,58 +124,6 @@ bool isDuplicate(const char* sender, message_type_t type, const char* msg_id) {
     return false;
 }
 
-
-// ================= ENCRYPTION =================
-/*
-String encryptSimple(String msg, String enckey)
-{
-    String out = "";
-
-    for (int i = 0; i < msg.length(); i++)
-    {
-        char c = msg[i];
-        int index = encCharset.indexOf(c);
-
-        if (index == -1) {
-            out += c; // keep delimiters like , / - & %
-            continue;
-        }
-
-        int shift = enckey[i % enckey.length()] + i;
-        int newIndex = (index + shift) % encCharset.length();
-        out += encCharset[newIndex];
-    }
-
-    return out;
-}
-
-//================= DECRYPTION =================
-String decryptSimple(String msg, String enckey)
-{
-    String out = "";
-
-    for (int i = 0; i < msg.length(); i++)
-    {
-        char c = msg[i];
-        int index = encCharset.indexOf(c);
-
-        if (index == -1) {
-            out += c;
-            continue;
-        }
-
-        int shift = enckey[i % enckey.length()] + i;
-        int newIndex = index - shift;
-
-        while (newIndex < 0)
-            newIndex += encCharset.length();
-
-        out += encCharset[newIndex];
-    }
-
-    return out;
-}
-*/
 //================= ENCRYPTION FUNCTIONS =================
 void encryptSimple(const char* msg, char* out, const char* enckey) {
     int msgLen = strlen(msg);

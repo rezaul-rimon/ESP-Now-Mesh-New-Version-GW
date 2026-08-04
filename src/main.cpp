@@ -25,7 +25,7 @@ void setup() {
     delay(100);
 
     SerialMon.println("\n====================================");
-    SerialMon.println("  ==    DMA IoT Lamp-Post GATEWAY    ==");
+    SerialMon.println(" == DMA Chiller Master Node/GATEWAY ==");
     SerialMon.println("--------------------------------------");
     SerialMon.printf ("  ==      FW Version: %s        ==", FW_VERSION);
     SerialMon.println();
@@ -72,13 +72,6 @@ void setup() {
     // maxRecentIDs = preferences.getInt("dedup_size", 250);
     // SerialMon.println("Deduplication Size: " + String(maxRecentIDs));
     preferences.end();
-
-    // ---- LDR SENSOR SETUP ----
-    #ifdef USE_LDR_SENSOR
-        Serial.println("🔄 Initializing LDR Sensor...");
-        pinMode(LDR_PIN, INPUT);
-        Serial.println("\n✅ LDR Sensor Test");
-    #endif
 
     GSM_setup();
 
@@ -330,36 +323,6 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
         return;
     }
 
-    // Message msg;
-    // msg.sender_id = Local_ID;
-    // msg.receiver_id = message.substring(0, commaIndex);
-    // msg.command = message.substring(commaIndex + 1);
-    // msg.type = MSG_CMD;
-    // msg.msg_id = generateMessageID();
-    // msg.last_hop = Local_ID;
-    // msg.hop_count = 0;
-
-    // String nodePayload =
-    //     msg.sender_id + "," +
-    //     msg.receiver_id + "," +
-    //     msg.command + "," +
-    //     String(msg.type) + "," +
-    //     msg.msg_id + "," +
-    //     msg.last_hop + "," +
-    //     String(msg.hop_count);
-    
-    // if(useEncryption) {
-    //     SerialMon.println("🔐 Encrypting...");
-    //     String encPayload = encryptSimple(nodePayload, enckey);
-    //     SerialMon.println("📤 CMD Sent: " + encPayload);
-    //     esp_now_send(broadcastAddress, (uint8_t*)encPayload.c_str(), encPayload.length());
-    //     SerialMon.println("📤 CMD Sent: " + decryptSimple(encPayload, enckey));
-    // } else {
-    //     SerialMon.println("⚠️ Sending without encryption!");
-    //     SerialMon.println("📤 CMD Sent: " + nodePayload);
-    //     esp_now_send(broadcastAddress, (uint8_t*)nodePayload.c_str(), nodePayload.length());
-    // }
-
     char receiver[16];
     char command[64];
 
@@ -470,72 +433,13 @@ void publishHeartbeat() {
     }
 }
 
-// LDR to Lux conversion function
-#ifdef USE_LDR_SENSOR
-  float ldrToLux(int adc) {
-    // Known calibration points
-    const int ADC_vals[5] = {4048, 3800, 2096, 1966, 1600};
-    const float Lux_vals[5] = {4048, 960, 16.67, 11.67, 10.83};
-
-    // If out of range
-    if(adc >= ADC_vals[0]) return Lux_vals[0];
-    if(adc <= ADC_vals[4]) return Lux_vals[4];
-
-    // Find which segment
-    for(int i=0; i<4; i++){
-        if(adc <= ADC_vals[i] && adc >= ADC_vals[i+1]){
-        float log_adc1 = log(ADC_vals[i]);
-        float log_adc2 = log(ADC_vals[i+1]);
-        float log_lux1 = log(Lux_vals[i]);
-        float log_lux2 = log(Lux_vals[i+1]);
-
-        float log_adc = log(adc);
-        float log_lux = log_lux1 + (log_lux2 - log_lux1) * (log_adc - log_adc1) / (log_adc2 - log_adc1);
-
-        return exp(log_lux);  // return interpolated Lux
-        }
-    }
-    return 0; // fallback
-  }
-#endif
 
 void publishData(){
-  
-    float lux = -1;
-    // Read LDR value and convert to Lux
-    #ifdef USE_LDR_SENSOR
-        Serial.print("LDR Value: ");
-        int ldrValue = analogRead(LDR_PIN);
-        // ldrValue = map(ldrValue, 0, 4095, 4095, 0); // Invert reading
-        Serial.print(ldrValue);
-        Serial.println();
-
-        lux = ldrToLux(ldrValue);
-        // lux = lux * 1.45; // Calibration factor
-        Serial.print("Calculated Lux: ");
-        Serial.print(lux, 2);
-        Serial.println(" lx");
-    #endif
-    //========================================//
-
-    // Get light level from BH1750
-    #ifdef USE_GY30
-        
-        if (lightMeter.measurementReady()) {
-        lux = lightMeter.readLightLevel();
-        Serial.print("BH1750 Light Level: ");
-        Serial.print(lux, 2);
-        Serial.println(" lx");
-        } else {
-        Serial.println("BH1750 Measurement not ready");
-        }
-    #endif
-    //========================================//
 
     // Prepare and send MQTT data message
     MQTTMessage dataMsg;
     snprintf(dataMsg.topic, sizeof(dataMsg.topic), "%s", MQTT_LP_PUB);
-    String payload = String(DEVICE_ID) + ",LUX:" + (lux >= 0 ? String(lux, 2) : "ERROR");
+    String payload = String(DEVICE_ID) + ",I am Data from Gateway!";
     snprintf(dataMsg.payload, sizeof(dataMsg.payload), "%s", payload.c_str());
     
     if (xQueueSend(mqttPublishQueue, &dataMsg, pdMS_TO_TICKS(100)) == pdTRUE) {
