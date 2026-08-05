@@ -214,7 +214,7 @@ bool connectToMQTT() {
 
     if (connected) {
         SerialMon.println("NetworkTask: MQTT connected");
-        String fullSubTopic = MQTT_LP_SUB + DEVICE_ID;
+        String fullSubTopic = MQTT_CHILLER_SUB + DEVICE_ID;
         mqtt.subscribe(fullSubTopic.c_str());
         SerialMon.printf("NetworkTask: Subscribed to: %s\n", fullSubTopic.c_str());
     } else {

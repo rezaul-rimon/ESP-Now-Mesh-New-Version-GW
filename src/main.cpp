@@ -73,6 +73,12 @@ void setup() {
     // SerialMon.println("Deduplication Size: " + String(maxRecentIDs));
     preferences.end();
 
+        //=== Initialize DS18B20 Sensors ===//
+    #ifdef USE_DS18B20
+        ds18b20_setup();
+    #endif
+    //=======================================================
+
     GSM_setup();
 
     mqttPublishQueue = xQueueCreate(MQTT_PUB_QUEUE_SIZE, sizeof(MQTTMessage));
@@ -202,7 +208,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     if(message == "ping") {
         SerialMon.println("MQTT Command: Ping received");
         MQTTMessage response;
-        snprintf(response.topic, sizeof(response.topic), "%s", MQTT_LP_ACK);
+        snprintf(response.topic, sizeof(response.topic), "%s", MQTT_CHILLER_ACK);
         snprintf(response.payload, sizeof(response.payload), "%s,%s,%d", DEVICE_ID.c_str(),"gsm_connected", modem.getSignalQuality());
         sendLedCommand(LED_PING_ACK);
         xQueueSend(mqttPublishQueue, &response, pdMS_TO_TICKS(100));
@@ -252,7 +258,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
         Serial.println(simID);
 
         MQTTMessage response2;
-        snprintf(response2.topic, sizeof(response2.topic), "%s", MQTT_LP_ACK);
+        snprintf(response2.topic, sizeof(response2.topic), "%s", MQTT_CHILLER_ACK);
         snprintf(response2.payload, sizeof(response2.payload), "%s,%s,%s", DEVICE_ID.c_str(),operatorName, simID);
         sendLedCommand(LED_PING_ACK);
         xQueueSend(mqttPublishQueue, &response2, pdMS_TO_TICKS(100));
@@ -289,7 +295,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
         firmwareUrl = defaultFirmwareUrl;
 
         MQTTMessage response;
-        snprintf(response.topic, sizeof(response.topic), "%s", MQTT_LP_ACK);
+        snprintf(response.topic, sizeof(response.topic), "%s", MQTT_CHILLER_ACK);
         snprintf(response.payload, sizeof(response.payload), "%s,%s,%s", DEVICE_ID.c_str(),"OTA update starting", firmwareUrl.c_str());
         xQueueSend(mqttPublishQueue, &response, pdMS_TO_TICKS(100));
 
@@ -301,7 +307,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
         firmwareUrl = message;
 
         MQTTMessage response;
-        snprintf(response.topic, sizeof(response.topic), "%s", MQTT_LP_ACK);
+        snprintf(response.topic, sizeof(response.topic), "%s", MQTT_CHILLER_ACK);
         snprintf(response.payload, sizeof(response.payload), "%s,%s,%s", DEVICE_ID.c_str(),"OTA update starting", firmwareUrl.c_str());
         xQueueSend(mqttPublishQueue, &response, pdMS_TO_TICKS(100));
 
@@ -404,7 +410,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
 // HB = 1191032506160004,FWV:V1.201,HWV:3.0,ARMED:1,DATA_TYPE:gsm,AC_LINE:0,SD_LOGING:1,HEALTH:123456,UP_TIME:789Min,RSSI:-20
 void publishHeartbeat() {
     MQTTMessage hbMsg;
-    snprintf(hbMsg.topic, sizeof(hbMsg.topic), "%s", MQTT_LP_HB);
+    snprintf(hbMsg.topic, sizeof(hbMsg.topic), "%s", MQTT_CHILLER_HB);
     uint8_t rssi = modem.getSignalQuality();
     int health = ESP.getFreeHeap();
     int uptime_m = millis() / 60000;
@@ -436,15 +442,41 @@ void publishHeartbeat() {
 
 void publishData(){
 
-    // Prepare and send MQTT data message
-    MQTTMessage dataMsg;
-    snprintf(dataMsg.topic, sizeof(dataMsg.topic), "%s", MQTT_LP_PUB);
-    String payload = String(DEVICE_ID) + ",I am Data from Gateway!";
-    snprintf(dataMsg.payload, sizeof(dataMsg.payload), "%s", payload.c_str());
-    
-    if (xQueueSend(mqttPublishQueue, &dataMsg, pdMS_TO_TICKS(100)) == pdTRUE) {
-        SerialMon.println("MainTask: Data message queued");
-    }
+    // Function to send temperature data
+    #ifdef USE_DS18B20
+        // Placeholder for future data sending logic
+        // Prepare and send MQTT data message
+        MQTTMessage dataMsg;
+        
+        sensors.requestTemperatures();   // Trigger conversion
+        for (int i = 0; i < sensorCount; i++) {
+            float temperature = sensors.getTempC(sensorAddress[i]);
+            String id = addressToString(sensorAddress[i]);
+            Serial.print(id);
+            Serial.print(",");
+            Serial.println(temperature);   // Print exactly as requested
+
+            snprintf(
+                dataMsg.payload,
+                sizeof(dataMsg.payload),
+                "%s,%s,%s/%.2f",
+                DEVICE_ID.c_str(),
+                CHILLER_ID.c_str(),
+                id.c_str(),
+                temperature
+            );
+            strcpy(dataMsg.topic, MQTT_CHILLER_TEMP);
+            if (xQueueSend(mqttPublishQueue, &dataMsg, pdMS_TO_TICKS(100)) == pdTRUE) {
+                SerialMon.println("MainTask: Sensor Data queued");
+            }
+            
+        }
+
+        SerialMon.println("----------------------------");
+
+    #endif
+    //===================================================//
+
 }
 
 // ==================== Helper Functions ====================

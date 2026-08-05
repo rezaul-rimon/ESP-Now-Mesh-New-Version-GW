@@ -7,26 +7,22 @@
 #include "freertos/semphr.h"
 #include <esp_task_wdt.h>
 
+#define USE_DS18B20  // Uncomment to enable DS18B20 support
+
 // ==================== Configuration ====================
 #define OTA 1  // Set to 1 for OTA mode, 0 for normal mode
 #define HW_VERSION "3.1"
 #define FW_VERSION "V3.262.2"
 #define OTA_DATE "260701"
-
-#define USE_LDR_SENSOR
-// #define USE_GY30
-
-// Sensor configuration
-#ifdef USE_LDR_SENSOR
-    #define LDR_PIN 39 // Pin for LDR sensor
-#endif
+//-------------------------------------------------------//
 
 #define WORK_PACKAGE "1225"
 #define DEVICE_TYPE "03"
-#define DEVICE_CODE_UPLOAD_DATE "260121"
-#define DEVICE_SERIAL_ID "0015"
+#define DEVICE_CODE_UPLOAD_DATE "260805"
+#define DEVICE_SERIAL_ID "0001"
 
 #define UNIQUE_DEVICE_ID WORK_PACKAGE DEVICE_TYPE DEVICE_CODE_UPLOAD_DATE DEVICE_SERIAL_ID
+//=========================================================================================//
 
 bool deviceArmed = true;  // Default to armed, can be changed via MQTT command
 
@@ -35,6 +31,7 @@ QueueHandle_t mqttPublishQueue = NULL;
 
 String DEVICE_ID = "";
 String MAC_FALLBACK_ID = "";
+String CHILLER_ID = "INCH1101";
 
 
 // Serial and SIM-A7670 pin config
@@ -49,7 +46,7 @@ String MAC_FALLBACK_ID = "";
 #define OFF LOW
 
 // Timing Configuration
-const unsigned long DATA_INTERVAL = 5 * 60000UL;  // 1 minute
+const unsigned long DATA_INTERVAL = 5 * 60000UL;  // 5 minute
 unsigned long lastDataTime = 0;
 const unsigned long MAIN_TASK_PRIORITY = 2;
 const unsigned long HEARTBEAT_INTERVAL = 5 * 60000UL;
@@ -69,14 +66,11 @@ bool modemWasInitialized = false;
 
 
 // ==================== Global Variables ====================
-const char* MQTT_LP_HB = "DMA-LP/GW/HB";
-const char* MQTT_LP_PUB = "DMA-LP/GW/PUB";
-const char* MQTT_LP_SUB = "DMA-LP/GW/SUB/";
-const char* MQTT_LP_ACK = "DMA-LP/GW/ACK";
+const char* MQTT_CHILLER_HB = "DMA/CHILLER/HB";
+const char* MQTT_CHILLER_TEMP = "DMA/CHILLER/TEMP";
+const char* MQTT_CHILLER_SUB = "DMA/CHILLER/SUB/";
+const char* MQTT_CHILLER_ACK = "DMA/CHILLER/ACK";
 
-const char* MQTT_LP_NODE_HB = "DMA-LP/NODE/HB";
-const char* MQTT_LP_NODE_SD = "DMA-LP/NODE/SD";
-const char* MQTT_LP_NODE_ACK = "DMA-LP/NODE/ACK";
 struct MQTTMessage {
     char topic[64];
     char payload[128];

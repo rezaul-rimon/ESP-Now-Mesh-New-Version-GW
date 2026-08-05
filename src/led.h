@@ -4,7 +4,7 @@
 #include "config.h"
 
 // LED configuration
-#define LED_PIN 4
+#define LED_PIN 27
 #define NUM_LEDS 1
 CRGB leds[NUM_LEDS];
 
