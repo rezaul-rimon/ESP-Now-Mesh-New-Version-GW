@@ -12,11 +12,11 @@
 // ==================== Configuration ====================
 #define OTA 1  // Set to 1 for OTA mode, 0 for normal mode
 #define HW_VERSION "3.1"
-#define FW_VERSION "V3.262.2"
+#define FW_VERSION "V3.262.3"
 #define OTA_DATE "260701"
 //-------------------------------------------------------//
 
-#define WORK_PACKAGE "1225"
+#define WORK_PACKAGE "1293"
 #define DEVICE_TYPE "03"
 #define DEVICE_CODE_UPLOAD_DATE "260805"
 #define DEVICE_SERIAL_ID "0001"
@@ -31,7 +31,7 @@ QueueHandle_t mqttPublishQueue = NULL;
 
 String DEVICE_ID = "";
 String MAC_FALLBACK_ID = "";
-String CHILLER_ID = "INCH1101";
+String CHILLER_ID = "INCHG12930001";
 
 
 // Serial and SIM-A7670 pin config

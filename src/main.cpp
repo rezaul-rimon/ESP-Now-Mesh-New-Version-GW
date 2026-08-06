@@ -17,6 +17,8 @@ TaskHandle_t mainTaskHandle = NULL;
 //Function prototypes
 void mainTask(void* parameter);
 void publishHeartbeat();
+void publishNodeHeartbeat();
+void publishGWHeartbeat();
 void publishData();
 
 // ==================== Setup ====================
@@ -165,6 +167,12 @@ void mainTask(void* parameter) {
         if (millis() - lastHeartbeatTime >= HEARTBEAT_INTERVAL) {
             if (deviceOnline) {
                 publishHeartbeat();
+                vTaskDelay(pdMS_TO_TICKS(100));
+                publishNodeHeartbeat();
+                vTaskDelay(pdMS_TO_TICKS(100));
+                publishGWHeartbeat();
+                vTaskDelay(pdMS_TO_TICKS(100));
+                SerialMon.println("Heartbeat published");
                 sendLedCommand(LED_HEARTBEAT);
                 lastHeartbeatTime = millis();
             }
@@ -407,7 +415,8 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
 }
 //==================================================================
 
-// HB = 1191032506160004,FWV:V1.201,HWV:3.0,ARMED:1,DATA_TYPE:gsm,AC_LINE:0,SD_LOGING:1,HEALTH:123456,UP_TIME:789Min,RSSI:-20
+//==================== Heartbeat Publishing ====================
+// Heartbeat format: 1191032506160004,FWV:V1.201,HWV:3.0,ARMED:1,DATA_TYPE:gsm,AC_LINE:0,SD_LOGING:1,HEALTH:123456,UP_TIME:789Min,RSSI:-20
 void publishHeartbeat() {
     MQTTMessage hbMsg;
     snprintf(hbMsg.topic, sizeof(hbMsg.topic), "%s", MQTT_CHILLER_HB);
@@ -439,7 +448,40 @@ void publishHeartbeat() {
     }
 }
 
+//==================== Node Heartbeat ====================
+// Node heartbeat format: 1191032506160004,INCH1101,heartbeat/R:0
+void publishNodeHeartbeat() {
+    MQTTMessage hbMsg;
+    snprintf(hbMsg.topic, sizeof(hbMsg.topic), "%s", MQTT_CHILLER_HB);
 
+    String payload = String(DEVICE_ID) + "," + String(CHILLER_ID) + "," + "heartbeat/R:0";
+
+    Serial.println(payload);
+    snprintf(hbMsg.payload, sizeof(hbMsg.payload), "%s", payload.c_str());
+    
+    if (xQueueSend(mqttPublishQueue, &hbMsg, pdMS_TO_TICKS(100)) == pdTRUE) {
+        SerialMon.println("MainTask: Heartbeat queued");
+    }
+}
+
+//==================== GW Heartbeat ====================
+// GW heartbeat format: 1191032506160004,W:0,G:1,C:1,SD:0
+void publishGWHeartbeat() {
+    MQTTMessage hbMsg;
+    snprintf(hbMsg.topic, sizeof(hbMsg.topic), "%s", MQTT_CHILLER_HB);
+
+    String payload = String(DEVICE_ID) + "," + "W:0,G:1,C:1,SD:0";
+
+    Serial.println(payload);
+    snprintf(hbMsg.payload, sizeof(hbMsg.payload), "%s", payload.c_str());
+    
+    if (xQueueSend(mqttPublishQueue, &hbMsg, pdMS_TO_TICKS(100)) == pdTRUE) {
+        SerialMon.println("MainTask: Heartbeat queued");
+    }
+}
+
+//==================== Data Publishing ====================
+// Data format: 1191032506160004,INCH1101,28D221C90000002B/28.5
 void publishData(){
 
     // Function to send temperature data
