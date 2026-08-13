@@ -19,7 +19,6 @@ void mainTask(void* parameter);
 void publishHeartbeat();
 void publisMoreFishHeartbeat();
 void publishSensorsData();
-void publishSolarAndBatteryVoltage();
 
 // ==================== Setup ====================
 void setup() {
@@ -38,6 +37,8 @@ void setup() {
     
     FastLED_setup();
     Display_setup();
+    sensorMutex = xSemaphoreCreateMutex();
+    initSensors();
     
     sendLedCommand(LED_OFFLINE);
     // sendDisplayCommand(DISPLAY_OFFLINE);
@@ -183,8 +184,6 @@ void mainTask(void* parameter) {
                 // Read sensors and publish data
                 SerialMon.println("Reading sensors and publishing data...");
                 publishSensorsData();
-                vTaskDelay(pdMS_TO_TICKS(100));
-                publishSolarAndBatteryVoltage();
 
                 SerialMon.println("Sensor data published");
                 sendLedCommand(LED_RF_HB);
@@ -225,8 +224,6 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     if(message == "data"){
         SerialMon.println("MQTT Command: Data Request received");
         publishSensorsData();
-        vTaskDelay(pdMS_TO_TICKS(100));
-        publishSolarAndBatteryVoltage();
         return;
     }
 
@@ -469,65 +466,132 @@ void publisMoreFishHeartbeat() {
     }
 }
 
-//==================== Data Publishing ====================
-// Data format: 1191032506160004,INCH1101,124,1345,2344
-void publishSensorsData(){
+//==================== Sensor Data Publishing ====================
+void publishSensorsData() {
+    // Read fresh sensor values
+    readAllSensors();
 
-    // Placeholder for future data sending logic
-    // Prepare and send MQTT data message
-    int TDS = 500; // Example TDS value
-    int Temp = 2400; // Example temperature value
-    int PH = 7789; // Example pH value
+    // Take mutex before reading sensorData
+    if (xSemaphoreTake(sensorMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+        // ============================================================
+        // Serial Print All Sensor Data
+        // ============================================================
+        SerialMon.println("===== Sensor Data =====");
 
+        // Solar
+        SerialMon.print("Solar Raw: ");
+        SerialMon.println(sensorData.solarRaw);
+        SerialMon.print("Solar Pin V: ");
+        SerialMon.println(sensorData.solarPinV, 4);
+        SerialMon.print("Solar Voltage: ");
+        SerialMon.println(sensorData.solarVoltage, 3);
+        SerialMon.print("Solar Mapped (0-1024): ");
+        SerialMon.println(sensorData.solarMapped, 1);
+        SerialMon.println("------------------------");
+        SerialMon.println();
 
-    MQTTMessage dataMsg;
+        updateSolarVoltage(sensorData.solarVoltage);
 
+        // Battery
+        SerialMon.print("Batt Raw: ");
+        SerialMon.println(sensorData.battRaw);
+        SerialMon.print("Batt Pin V: ");
+        SerialMon.println(sensorData.battPinV, 4);
+        SerialMon.print("Battery Voltage: ");
+        SerialMon.println(sensorData.batteryVoltage, 3);
+        SerialMon.print("Batt Mapped (0-1024): ");
+        SerialMon.println(sensorData.battMapped, 1);
+        SerialMon.println("------------------------");
+        SerialMon.println();
+
+        updateBatteryVoltage(sensorData.batteryVoltage);
+
+        // TDS
+        SerialMon.print("TDS Raw: ");
+        SerialMon.println(sensorData.tdsRaw);
+        SerialMon.print("TDS Voltage: ");
+        SerialMon.println(sensorData.tdsV, 4);
+        SerialMon.print("TDS Mapped (0-1024): ");
+        SerialMon.println(sensorData.tdsMapped, 1);
+        SerialMon.println("------------------------");
+        SerialMon.println();
+
+        updateTDS(sensorData.tdsMapped);
+
+        // NTC
+        SerialMon.print("NTC Raw: ");
+        SerialMon.println(sensorData.ntcRaw);
+        SerialMon.print("NTC Voltage: ");
+        SerialMon.println(sensorData.ntcV, 4);
+        SerialMon.print("NTC Mapped (0-1024): ");
+        SerialMon.println(sensorData.ntcMapped, 1);
+        SerialMon.println("------------------------");
+        SerialMon.println();
+
+        updateTemperature(sensorData.ntcMapped);
+
+        // pH
+        SerialMon.print("pH Raw: ");
+        SerialMon.println(sensorData.phRaw);
+        SerialMon.print("pH Voltage: ");
+        SerialMon.println(sensorData.phV, 4);
+        SerialMon.print("pH Mapped (0-1024): ");
+        SerialMon.println(sensorData.phMapped, 1);
+        SerialMon.println("------------------------");
+        SerialMon.println();
+
+        updatePH(sensorData.phMapped);
+
+        SerialMon.println("============ END ============");
+        SerialMon.println();
+
+        // ============================================================
+        // Publish Packet 1: DEVICE_ID,DEVICE_ID,battMapped,solarMapped
+        // ============================================================
+        MQTTMessage dataMsg1;
         snprintf(
-            dataMsg.payload,
-            sizeof(dataMsg.payload),
-            "%s,%s,%d,%d,%d",
-            DEVICE_ID.c_str(),
-            DEVICE_ID.c_str(),
-            TDS,
-            Temp,
-            PH
-        );
-        strcpy(dataMsg.topic, MQTT_PUB);
-        if (xQueueSend(mqttPublishQueue, &dataMsg, pdMS_TO_TICKS(100)) == pdTRUE) {
-            SerialMon.println("MainTask: Sensor Data queued");
-        }
-        
-
-    SerialMon.println("----------------------------");
-}
-
-// Data format: 1191032506160004,INCH1101,500,1200
-void publishSolarAndBatteryVoltage(){
-
-    // Placeholder for future data sending logic
-    // Prepare and send MQTT data message
-    int Solar = 500; // Example Solar value
-    int Battery = 1200; // Example Battery value
-
-
-    MQTTMessage dataMsg;
-
-        snprintf(
-            dataMsg.payload,
-            sizeof(dataMsg.payload),
+            dataMsg1.payload,
+            sizeof(dataMsg1.payload),
             "%s,%s,%d,%d",
             DEVICE_ID.c_str(),
             DEVICE_ID.c_str(),
-            Solar,
-            Battery
+            (int)sensorData.battMapped,
+            (int)sensorData.solarMapped
         );
-        strcpy(dataMsg.topic, MQTT_PUB);
-        if (xQueueSend(mqttPublishQueue, &dataMsg, pdMS_TO_TICKS(100)) == pdTRUE) {
-            SerialMon.println("MainTask: Sensor Data queued");
-        }
-        
+        strcpy(dataMsg1.topic, MQTT_PUB);
 
-    SerialMon.println("----------------------------");
+        if (xQueueSend(mqttPublishQueue, &dataMsg1, pdMS_TO_TICKS(100)) == pdTRUE) {
+            SerialMon.println("MQTT: Battery & Solar data queued");
+        } else {
+            SerialMon.println("MQTT: Failed to queue Battery & Solar data");
+        }
+
+        // ============================================================
+        // Publish Packet 2: DEVICE_ID,DEVICE_ID,tdsMapped,ntcMapped,phMapped
+        // ============================================================
+        MQTTMessage dataMsg2;
+        snprintf(
+            dataMsg2.payload,
+            sizeof(dataMsg2.payload),
+            "%s,%s,%d,%d,%d",
+            DEVICE_ID.c_str(),
+            DEVICE_ID.c_str(),
+            (int)sensorData.tdsMapped,
+            (int)sensorData.ntcMapped,
+            (int)sensorData.phMapped
+        );
+        strcpy(dataMsg2.topic, MQTT_PUB);
+
+        if (xQueueSend(mqttPublishQueue, &dataMsg2, pdMS_TO_TICKS(100)) == pdTRUE) {
+            SerialMon.println("MQTT: TDS, NTC, pH data queued");
+        } else {
+            SerialMon.println("MQTT: Failed to queue TDS, NTC, pH data");
+        }
+
+        xSemaphoreGive(sensorMutex);
+    } else {
+        SerialMon.println("Failed to take sensor mutex");
+    }
 }
 
 // ==================== Helper Functions ====================

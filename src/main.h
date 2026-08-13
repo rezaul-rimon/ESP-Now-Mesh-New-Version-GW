@@ -6,10 +6,12 @@
 #include "led.h"
 #include "gsm.h"
 #include "display.h"
+#include "sensors.h"
 #include <freertos/FreeRTOS.h>
 #include <esp_task_wdt.h>
 #include <Preferences.h>
 
+SemaphoreHandle_t sensorMutex;
 
 //Function Prototypes
 void ledTask(void *param);
