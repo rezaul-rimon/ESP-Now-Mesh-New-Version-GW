@@ -17,9 +17,9 @@ TaskHandle_t mainTaskHandle = NULL;
 //Function prototypes
 void mainTask(void* parameter);
 void publishHeartbeat();
-void publishNodeHeartbeat();
-void publishGWHeartbeat();
-void publishData();
+void publisMoreFishHeartbeat();
+void publishSensorsData();
+void publishSolarAndBatteryVoltage();
 
 // ==================== Setup ====================
 void setup() {
@@ -27,7 +27,7 @@ void setup() {
     delay(100);
 
     SerialMon.println("\n====================================");
-    SerialMon.println(" == DMA Chiller Master Node/GATEWAY ==");
+    SerialMon.println(" == DL300-26 for fishRus/MoreFish ==");
     SerialMon.println("--------------------------------------");
     SerialMon.printf ("  ==      FW Version: %s        ==", FW_VERSION);
     SerialMon.println();
@@ -37,8 +37,11 @@ void setup() {
     SerialMon.println();
     
     FastLED_setup();
+    Display_setup();
+    
     sendLedCommand(LED_OFFLINE);
-        
+    // sendDisplayCommand(DISPLAY_OFFLINE);
+
     pinMode(ACLINE_PIN, INPUT);  
     
     // Get MAC address for fallback ID
@@ -74,12 +77,6 @@ void setup() {
     // maxRecentIDs = preferences.getInt("dedup_size", 250);
     // SerialMon.println("Deduplication Size: " + String(maxRecentIDs));
     preferences.end();
-
-        //=== Initialize DS18B20 Sensors ===//
-    #ifdef USE_DS18B20
-        ds18b20_setup();
-    #endif
-    //=======================================================
 
     GSM_setup();
 
@@ -168,12 +165,14 @@ void mainTask(void* parameter) {
             if (deviceOnline) {
                 publishHeartbeat();
                 vTaskDelay(pdMS_TO_TICKS(100));
-                publishNodeHeartbeat();
+
+                publisMoreFishHeartbeat();
                 vTaskDelay(pdMS_TO_TICKS(100));
-                publishGWHeartbeat();
-                vTaskDelay(pdMS_TO_TICKS(100));
+
                 SerialMon.println("Heartbeat published");
                 sendLedCommand(LED_HEARTBEAT);
+                // sendDisplayCommand(DISPLAY_RF_HB);
+
                 lastHeartbeatTime = millis();
             }
         }
@@ -183,8 +182,12 @@ void mainTask(void* parameter) {
             if(deviceOnline) {
                 // Read sensors and publish data
                 SerialMon.println("Reading sensors and publishing data...");
-                publishData();
-                // Implement sensor reading and MQTT publishing here
+                publishSensorsData();
+                vTaskDelay(pdMS_TO_TICKS(100));
+                publishSolarAndBatteryVoltage();
+
+                SerialMon.println("Sensor data published");
+                sendLedCommand(LED_RF_HB);
             }
         }
         
@@ -215,17 +218,15 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
 
     if(message == "ping") {
         SerialMon.println("MQTT Command: Ping received");
-        MQTTMessage response;
-        snprintf(response.topic, sizeof(response.topic), "%s", MQTT_CHILLER_ACK);
-        snprintf(response.payload, sizeof(response.payload), "%s,%s,%d", DEVICE_ID.c_str(),"gsm_connected", modem.getSignalQuality());
-        sendLedCommand(LED_PING_ACK);
-        xQueueSend(mqttPublishQueue, &response, pdMS_TO_TICKS(100));
+        publishHeartbeat();
         return;
     }
 
     if(message == "data"){
         SerialMon.println("MQTT Command: Data Request received");
-        publishData();
+        publishSensorsData();
+        vTaskDelay(pdMS_TO_TICKS(100));
+        publishSolarAndBatteryVoltage();
         return;
     }
 
@@ -253,20 +254,20 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
 
         // ================= IMSI =================
 
-        String imsi = modem.getIMSI();
+        String imsi = modem.getSimCCID();
 
         // Last 8 digit only
         String simID = "";
 
-        if (imsi.length() >= 8) {
-            simID = imsi.substring(imsi.length() - 8);
+        if (imsi.length() >= 18) {
+            simID = imsi.substring(imsi.length() - 18);
         }
 
         Serial.print("SIM ID: ");
         Serial.println(simID);
 
         MQTTMessage response2;
-        snprintf(response2.topic, sizeof(response2.topic), "%s", MQTT_CHILLER_ACK);
+        snprintf(response2.topic, sizeof(response2.topic), "%s", MQTT_ACK);
         snprintf(response2.payload, sizeof(response2.payload), "%s,%s,%s", DEVICE_ID.c_str(),operatorName, simID);
         sendLedCommand(LED_PING_ACK);
         xQueueSend(mqttPublishQueue, &response2, pdMS_TO_TICKS(100));
@@ -303,7 +304,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
         firmwareUrl = defaultFirmwareUrl;
 
         MQTTMessage response;
-        snprintf(response.topic, sizeof(response.topic), "%s", MQTT_CHILLER_ACK);
+        snprintf(response.topic, sizeof(response.topic), "%s", MQTT_ACK);
         snprintf(response.payload, sizeof(response.payload), "%s,%s,%s", DEVICE_ID.c_str(),"OTA update starting", firmwareUrl.c_str());
         xQueueSend(mqttPublishQueue, &response, pdMS_TO_TICKS(100));
 
@@ -315,7 +316,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
         firmwareUrl = message;
 
         MQTTMessage response;
-        snprintf(response.topic, sizeof(response.topic), "%s", MQTT_CHILLER_ACK);
+        snprintf(response.topic, sizeof(response.topic), "%s", MQTT_ACK);
         snprintf(response.payload, sizeof(response.payload), "%s,%s,%s", DEVICE_ID.c_str(),"OTA update starting", firmwareUrl.c_str());
         xQueueSend(mqttPublishQueue, &response, pdMS_TO_TICKS(100));
 
@@ -330,7 +331,11 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
             return;
         }
     }
-    
+
+    //=================================================================
+    //==================== Mesh Command Publishing ====================
+    //=================================================================
+
     int commaIndex = message.indexOf(',');
     if (commaIndex < 0) {
         SerialMon.println("⚠️ Format: receiver,command");
@@ -419,7 +424,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
 // Heartbeat format: 1191032506160004,FWV:V1.201,HWV:3.0,ARMED:1,DATA_TYPE:gsm,AC_LINE:0,SD_LOGING:1,HEALTH:123456,UP_TIME:789Min,RSSI:-20
 void publishHeartbeat() {
     MQTTMessage hbMsg;
-    snprintf(hbMsg.topic, sizeof(hbMsg.topic), "%s", MQTT_CHILLER_HB);
+    snprintf(hbMsg.topic, sizeof(hbMsg.topic), "%s", MQTT_PUB);
     uint8_t rssi = modem.getSignalQuality();
     int health = ESP.getFreeHeap();
     int uptime_m = millis() / 60000;
@@ -449,28 +454,12 @@ void publishHeartbeat() {
 }
 
 //==================== Node Heartbeat ====================
-// Node heartbeat format: 1191032506160004,INCH1101,heartbeat/R:0
-void publishNodeHeartbeat() {
+// Node heartbeat format: 1191032506160004,Connected
+void publisMoreFishHeartbeat() {
     MQTTMessage hbMsg;
-    snprintf(hbMsg.topic, sizeof(hbMsg.topic), "%s", MQTT_CHILLER_HB);
+    snprintf(hbMsg.topic, sizeof(hbMsg.topic), "%s", MQTT_PUB);
 
-    String payload = String(DEVICE_ID) + "," + String(CHILLER_ID) + "," + "heartbeat/R:0";
-
-    Serial.println(payload);
-    snprintf(hbMsg.payload, sizeof(hbMsg.payload), "%s", payload.c_str());
-    
-    if (xQueueSend(mqttPublishQueue, &hbMsg, pdMS_TO_TICKS(100)) == pdTRUE) {
-        SerialMon.println("MainTask: Heartbeat queued");
-    }
-}
-
-//==================== GW Heartbeat ====================
-// GW heartbeat format: 1191032506160004,W:0,G:1,C:1,SD:0
-void publishGWHeartbeat() {
-    MQTTMessage hbMsg;
-    snprintf(hbMsg.topic, sizeof(hbMsg.topic), "%s", MQTT_CHILLER_HB);
-
-    String payload = String(DEVICE_ID) + "," + "W:0,G:1,C:1,SD:0";
+    String payload = String(DEVICE_ID) + "," + "Connected";
 
     Serial.println(payload);
     snprintf(hbMsg.payload, sizeof(hbMsg.payload), "%s", payload.c_str());
@@ -481,44 +470,64 @@ void publishGWHeartbeat() {
 }
 
 //==================== Data Publishing ====================
-// Data format: 1191032506160004,INCH1101,28D221C90000002B/28.5
-void publishData(){
+// Data format: 1191032506160004,INCH1101,124,1345,2344
+void publishSensorsData(){
 
-    // Function to send temperature data
-    #ifdef USE_DS18B20
-        // Placeholder for future data sending logic
-        // Prepare and send MQTT data message
-        MQTTMessage dataMsg;
-        
-        sensors.requestTemperatures();   // Trigger conversion
-        for (int i = 0; i < sensorCount; i++) {
-            float temperature = sensors.getTempC(sensorAddress[i]);
-            String id = addressToString(sensorAddress[i]);
-            Serial.print(id);
-            Serial.print(",");
-            Serial.println(temperature);   // Print exactly as requested
+    // Placeholder for future data sending logic
+    // Prepare and send MQTT data message
+    int TDS = 500; // Example TDS value
+    int Temp = 2400; // Example temperature value
+    int PH = 7789; // Example pH value
 
-            snprintf(
-                dataMsg.payload,
-                sizeof(dataMsg.payload),
-                "%s,%s,%s/%.2f",
-                DEVICE_ID.c_str(),
-                CHILLER_ID.c_str(),
-                id.c_str(),
-                temperature
-            );
-            strcpy(dataMsg.topic, MQTT_CHILLER_TEMP);
-            if (xQueueSend(mqttPublishQueue, &dataMsg, pdMS_TO_TICKS(100)) == pdTRUE) {
-                SerialMon.println("MainTask: Sensor Data queued");
-            }
-            
+
+    MQTTMessage dataMsg;
+
+        snprintf(
+            dataMsg.payload,
+            sizeof(dataMsg.payload),
+            "%s,%s,%d,%d,%d",
+            DEVICE_ID.c_str(),
+            DEVICE_ID.c_str(),
+            TDS,
+            Temp,
+            PH
+        );
+        strcpy(dataMsg.topic, MQTT_PUB);
+        if (xQueueSend(mqttPublishQueue, &dataMsg, pdMS_TO_TICKS(100)) == pdTRUE) {
+            SerialMon.println("MainTask: Sensor Data queued");
         }
+        
 
-        SerialMon.println("----------------------------");
+    SerialMon.println("----------------------------");
+}
 
-    #endif
-    //===================================================//
+// Data format: 1191032506160004,INCH1101,500,1200
+void publishSolarAndBatteryVoltage(){
 
+    // Placeholder for future data sending logic
+    // Prepare and send MQTT data message
+    int Solar = 500; // Example Solar value
+    int Battery = 1200; // Example Battery value
+
+
+    MQTTMessage dataMsg;
+
+        snprintf(
+            dataMsg.payload,
+            sizeof(dataMsg.payload),
+            "%s,%s,%d,%d",
+            DEVICE_ID.c_str(),
+            DEVICE_ID.c_str(),
+            Solar,
+            Battery
+        );
+        strcpy(dataMsg.topic, MQTT_PUB);
+        if (xQueueSend(mqttPublishQueue, &dataMsg, pdMS_TO_TICKS(100)) == pdTRUE) {
+            SerialMon.println("MainTask: Sensor Data queued");
+        }
+        
+
+    SerialMon.println("----------------------------");
 }
 
 // ==================== Helper Functions ====================

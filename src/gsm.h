@@ -1,4 +1,5 @@
 #pragma once
+
 // This code is designed to run on an ESP32 device with a SIM7600 GSM module.
 #define TINY_GSM_MODEM_SIM7600
 #define TINY_GSM_USE_GPRS true
@@ -10,6 +11,7 @@
 #include <Arduino.h>
 #include <Update.h>
 #include "led.h"
+#include "display.h"
 
 // Configuration
 const char apn[] = "internet";
@@ -17,9 +19,9 @@ const char user[] = "";
 const char pass[] = "";
 
 // MQTT Configuration
-const char* broker = "broker2.dma-bd.com";
-const char* mqttUser = "broker2";
-const char* mqttPass = "Secret!@#$1234";
+const char* broker = "broker.dma-bd.com";
+// const char* mqttUser = "broker";
+// const char* mqttPass = "Secret!@#$1234";
 
 // OTA URLs
 // const char* otaHost = "ota.gmsabbirahamed.com";
@@ -29,7 +31,7 @@ const char* mqttPass = "Secret!@#$1234";
 
 String firmwareUrl = "";
 // const char* defaultFirmwareUrl = "http://ota.gmsabbirahamed.com/esp32/firmware/blink/firmware.bin";
-const char* defaultFirmwareUrl = "http://iot2.dma-bd.com:5000/download/incepta2631.bin";
+const char* defaultFirmwareUrl = "http://iot2.dma-bd.com:5000/download/DL300-26_fishRus.bin";
 
 //Task Handles
 TaskHandle_t networkTaskHandle = NULL;
@@ -125,6 +127,8 @@ bool powerCycleModem() {
 
 bool initializeModem() {
     sendLedCommand(LED_GSM_INIT);
+    // sendDisplayCommand(DISPLAY_GSM_INIT);
+
     SerialMon.println("NetworkTask: Initializing modem...");
     
     if (!modem.restart()) {
@@ -150,6 +154,8 @@ bool initializeModem() {
 
 bool connectToGPRS() {
     sendLedCommand(LED_CONNECTING);
+    // sendDisplayCommand(DISPLAY_GSM_CONNECTING);
+
     SerialMon.println("NetworkTask: Connecting to GPRS...");
     
     // Disconnect first if connected
@@ -191,20 +197,25 @@ String mqttStateToText(int state) {
 // Attempt MQTT connection with fallback
 bool connectToMQTT() {
     sendLedCommand(LED_MQTT_CONNECTING);
+    // sendDisplayCommand(DISPLAY_MQTT_CONNECTING);
+
     SerialMon.println("NetworkTask: Connecting to MQTT...");
 
     String clientId = "GMS-" + DEVICE_ID;
-    bool connected = mqtt.connect(clientId.c_str(), mqttUser, mqttPass);
+    // bool connected = mqtt.connect(clientId.c_str(), mqttUser, mqttPass);
+    bool connected = mqtt.connect(clientId.c_str());
 
     // Retry once if first attempt fails
     if (!connected) {
-        connected = mqtt.connect(clientId.c_str(), mqttUser, mqttPass);
+        // connected = mqtt.connect(clientId.c_str(), mqttUser, mqttPass);
+        connected = mqtt.connect(clientId.c_str());
     }
 
     for(int i = 0; i < 15 && !connected; i++) {
         SerialMon.printf("NetworkTask: MQTT initial connect retry %d\n", i+1);
         if (!connected) {
-            connected = mqtt.connect(clientId.c_str(), mqttUser, mqttPass);
+            // connected = mqtt.connect(clientId.c_str(), mqttUser, mqttPass);
+            connected = mqtt.connect(clientId.c_str());
         }
         else{
             break;
@@ -214,7 +225,7 @@ bool connectToMQTT() {
 
     if (connected) {
         SerialMon.println("NetworkTask: MQTT connected");
-        String fullSubTopic = MQTT_CHILLER_SUB + DEVICE_ID;
+        String fullSubTopic = MQTT_SUB + DEVICE_ID;
         mqtt.subscribe(fullSubTopic.c_str());
         SerialMon.printf("NetworkTask: Subscribed to: %s\n", fullSubTopic.c_str());
     } else {
@@ -234,6 +245,7 @@ void networkTask(void* parameter) {
 
     SerialMon.println("Network Task started");
     sendLedCommand(LED_OFFLINE);
+    // sendDisplayCommand(DISPLAY_OFFLINE);
 
     // Persistent state variables
     unsigned long lastSuccessfulOperation = 0;
@@ -324,6 +336,8 @@ void networkTask(void* parameter) {
                     unsigned long lastGsmErrorTime = millis();
                     while (millis() - lastGsmErrorTime < GSM_ERROR_RETRY_DELAY) {
                         sendLedCommand(LED_OFFLINE);
+                        // sendDisplayCommand(DISPLAY_OFFLINE);
+
                         vTaskDelay(pdMS_TO_TICKS(1000));
                     }
                     gprsRetries = 0; // Reset retry counter after delay
@@ -365,6 +379,8 @@ void networkTask(void* parameter) {
                 mqttConnected = true;
                 deviceOnline = true;
                 sendLedCommand(LED_ONLINE);
+                // sendDisplayCommand(DISPLAY_ONLINE);
+
                 SerialMon.println("NetworkTask: Device ONLINE");
                 lastSuccessfulOperation = millis();
 
@@ -425,6 +441,8 @@ void networkTask(void* parameter) {
                             mqttConnected = false;
                             deviceOnline = false;
                             sendLedCommand(LED_OFFLINE);
+                            // sendDisplayCommand(DISPLAY_OFFLINE);
+
                             break;
                         }
 
@@ -454,6 +472,8 @@ void networkTask(void* parameter) {
                     mqttConnected = false;
                     deviceOnline = false;
                     sendLedCommand(LED_OFFLINE);
+                    // sendDisplayCommand(DISPLAY_OFFLINE);
+
                     SerialMon.println("NetworkTask: GPRS lost, restarting connection...");
                     break; // Exit MQTT loop (goes to GPRS loop cleanup)
                 }
@@ -489,6 +509,8 @@ void networkTask(void* parameter) {
             mqttConnected = false;
             deviceOnline = false;
             sendLedCommand(LED_OFFLINE);
+            // sendDisplayCommand(DISPLAY_OFFLINE);
+
             SerialMon.println("NetworkTask: Connection lost, restarting...");
             delay(3000);
 
@@ -506,6 +528,7 @@ void networkTask(void* parameter) {
 void otaTask(void* parameter) {
     SerialMon.println("OTA Task started");
     sendLedCommand(LED_OTA_IN_PROGRESS);
+    // sendDisplayCommand(DISPLAY_OTA);
 
     suspendAllTasks();
 

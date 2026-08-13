@@ -393,7 +393,7 @@ void EspNowOnReceiveTask(void *pvParameters) {
             if(type == MSG_HB) {
                 // Serial.println("💓 Heartbeat from " + sender);
                 MQTTMessage hbMsg;
-                strcpy(hbMsg.topic, MQTT_CHILLER_HB);
+                strcpy(hbMsg.topic, MQTT_NODE_HB);
                 snprintf(
                     hbMsg.payload,
                     sizeof(hbMsg.payload),
@@ -415,7 +415,7 @@ void EspNowOnReceiveTask(void *pvParameters) {
                 Serial.print(": ");
                 Serial.println(command);
                 MQTTMessage sdMsg;
-                strcpy(sdMsg.topic, MQTT_CHILLER_TEMP);
+                strcpy(sdMsg.topic, MQTT_NODE_DATA);
                 snprintf(
                     sdMsg.payload,
                     sizeof(sdMsg.payload),
@@ -437,7 +437,7 @@ void EspNowOnReceiveTask(void *pvParameters) {
                 Serial.print(": ");
                 Serial.println(command);
                 MQTTMessage ackMsg;
-                strcpy(ackMsg.topic, MQTT_CHILLER_ACK);
+                strcpy(ackMsg.topic, MQTT_NODE_ACK);
                 snprintf(
                     ackMsg.payload,
                     sizeof(ackMsg.payload),

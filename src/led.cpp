@@ -1,77 +1,66 @@
-#pragma once
+// led.cpp
+#include "led.h"
 
-#include <FastLED.h>
-#include "config.h"
-
-// LED configuration
-#define LED_PIN 27
-#define NUM_LEDS 1
+// ============================================================
+// Global Object Definitions
+// ============================================================
 CRGB leds[NUM_LEDS];
-
-enum LedCommandType {
-    LED_OFFLINE,
-    LED_CONNECTING,
-    LED_GSM_INIT,
-    LED_MQTT_CONNECTING,
-    LED_ONLINE,
-    LED_HEARTBEAT,
-    LED_MQTT_RECEIVE,
-    LED_BUTTON_PRESS,
-    LED_BUTTON_HOLD_3SEC,
-    LED_BUTTON_HOLD_5SEC,
-    LED_BUTTON_HOLD_10SEC,
-    LED_OTA_IN_PROGRESS,
-    LED_PING_ACK,
-    LED_RF_CMD,
-    LED_RF_ACK,
-    LED_RF_HB,
-};
-
 TaskHandle_t ledTaskHandle = NULL;
 QueueHandle_t ledCommandQueue = NULL;
 
-#define LED_TASK_PRIORITY 1
-#define LED_CMD_QUEUE_SIZE 10
-#define LED_TASK_STACK 2048
-
-struct LedCommand {
-    LedCommandType type;
-    uint8_t brightness;
-};
-
-void sendLedCommand(LedCommandType type);
-void ledTask(void* parameter);
-
-void FastLED_setup(){
+// ============================================================
+// Public Functions
+// ============================================================
+void FastLED_setup() {
     // Initialize LED hardware
     FastLED.addLeds<WS2812B, LED_PIN, GRB>(leds, NUM_LEDS);
     FastLED.setBrightness(50);
     leds[0] = CRGB::Black;
     FastLED.show();
 
+    // Create command queue
     ledCommandQueue = xQueueCreate(LED_CMD_QUEUE_SIZE, sizeof(LedCommand));
+    if (ledCommandQueue == NULL) {
+        SerialMon.println("LED queue creation failed!");
+        return;
+    }
+
+    // Start LED task
+    xTaskCreatePinnedToCore(
+        ledTask,
+        "LedTask",
+        LED_TASK_STACK,
+        NULL,
+        LED_TASK_PRIORITY,
+        &ledTaskHandle,
+        0
+    );
+
+    // Set initial state
     sendLedCommand(LED_OFFLINE);
-    xTaskCreatePinnedToCore(ledTask, "LedTask", LED_TASK_STACK, NULL, LED_TASK_PRIORITY, &ledTaskHandle, 0);
 }
 
 void sendLedCommand(LedCommandType type) {
     if (ledCommandQueue == NULL) return;
-    
+
     LedCommand cmd;
     cmd.type = type;
     cmd.brightness = 100;
-    xQueueSend(ledCommandQueue, &cmd, 0);
+    xQueueSend(ledCommandQueue, &cmd, pdMS_TO_TICKS(10)); // short timeout to avoid blocking
 }
 
+// ============================================================
+// LED Task
+// ============================================================
 void ledTask(void* parameter) {
     unsigned long lastBlinkTime = 0;
     bool blinkState = false;
     LedCommand currentCommand;
     currentCommand.type = LED_OFFLINE;
     currentCommand.brightness = 100;
-    
+
     SerialMon.println("LED Task started");
-    
+
     while (1) {
         // Check for new LED commands
         LedCommand newCommand;
@@ -80,13 +69,13 @@ void ledTask(void* parameter) {
             lastBlinkTime = millis();
             blinkState = false;
         }
-        
+
         // Execute LED command
         switch (currentCommand.type) {
             case LED_OFFLINE:
                 leds[0] = CRGB::Red;
                 break;
-                
+
             case LED_CONNECTING:
                 // Red blinking
                 if (millis() - lastBlinkTime > 500) {
@@ -97,21 +86,13 @@ void ledTask(void* parameter) {
                 break;
 
             case LED_GSM_INIT:
-            {
-                //Rainbow animation
-                // static uint8_t hue = 0;
-                // leds[0] = CHSV(hue = hue+10, 255, currentCommand.brightness);
-                // leds[0] = CHSV(hue = hue+5, 255, 255);
+                // Red blinking (same as connecting for now)
                 if (millis() - lastBlinkTime > 500) {
                     blinkState = !blinkState;
                     leds[0] = blinkState ? CRGB::Red : CRGB::Black;
                     lastBlinkTime = millis();
                 }
-            }
-            break;
-                // Solid Purple
-                // leds[0] = CRGB::Purple;
-                // break;
+                break;
 
             case LED_MQTT_CONNECTING:
                 // Yellow blinking
@@ -121,12 +102,11 @@ void ledTask(void* parameter) {
                     lastBlinkTime = millis();
                 }
                 break;
-                
+
             case LED_ONLINE:
                 leds[0] = CRGB::Black;
                 break;
-                
-                
+
             case LED_HEARTBEAT:
                 // Single cyan blink
                 leds[0] = CRGB::Cyan;
@@ -143,7 +123,7 @@ void ledTask(void* parameter) {
                     currentCommand.type = LED_OFFLINE;
                 }
                 break;
-                
+
             case LED_MQTT_RECEIVE:
                 // Single blue blink
                 leds[0] = CRGB::Blue;
@@ -160,7 +140,7 @@ void ledTask(void* parameter) {
                     currentCommand.type = LED_OFFLINE;
                 }
                 break;
-                
+
             case LED_BUTTON_PRESS:
                 // Yellow flash
                 leds[0] = CRGB::Yellow;
@@ -169,28 +149,29 @@ void ledTask(void* parameter) {
                 leds[0] = CRGB::Black;
                 FastLED.show();
                 break;
-                
+
             case LED_BUTTON_HOLD_3SEC:
                 leds[0] = CRGB::LightCyan;
                 break;
-                
+
             case LED_BUTTON_HOLD_5SEC:
                 leds[0] = CRGB::Blue;
                 break;
-                
+
             case LED_BUTTON_HOLD_10SEC:
                 leds[0] = CRGB::Pink;
                 break;
-                
+
             case LED_OTA_IN_PROGRESS:
-            {
-                //Rainbow animation
-                static uint8_t hue = 0;
-                leds[0] = CHSV(hue = hue+20, 255, 255);
-            }
-            break;
+                {
+                    // Rainbow animation
+                    static uint8_t hue = 0;
+                    leds[0] = CHSV(hue = hue + 20, 255, 255);
+                }
+                break;
+
             case LED_PING_ACK:
-                // Green flash
+                // Green flash twice
                 leds[0] = CRGB::Green;
                 FastLED.show();
                 vTaskDelay(pdMS_TO_TICKS(100));
@@ -213,7 +194,7 @@ void ledTask(void* parameter) {
                 break;
 
             case LED_RF_CMD:
-                // Single white blink
+                // HotPink blink
                 leds[0] = CRGB::HotPink;
                 FastLED.show();
                 vTaskDelay(pdMS_TO_TICKS(250));
@@ -232,9 +213,9 @@ void ledTask(void* parameter) {
                     currentCommand.type = LED_OFFLINE;
                 }
                 break;
-                
+
             case LED_RF_ACK:
-                // Single white blink
+                // Green blink
                 leds[0] = CRGB::Green;
                 FastLED.show();
                 vTaskDelay(pdMS_TO_TICKS(250));
@@ -254,8 +235,8 @@ void ledTask(void* parameter) {
                 }
                 break;
 
-                case LED_RF_HB:
-                // Single white blink
+            case LED_RF_HB:
+                // Blue blink
                 leds[0] = CRGB::Blue;
                 FastLED.show();
                 vTaskDelay(pdMS_TO_TICKS(250));
@@ -275,9 +256,8 @@ void ledTask(void* parameter) {
                 }
                 break;
         }
-        
+
         FastLED.show();
         vTaskDelay(pdMS_TO_TICKS(50));
     }
 }
-
