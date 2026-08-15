@@ -3,6 +3,7 @@
 #include <Arduino.h>
 
 #define PIN_SOLAR_ADC       35
+#define PIN_TDS_RELAY       25
 #define DIVIDER_RATIO       ((22.0 + 4.7) / 4.7)
 
 #define SENSOR_SAMPLES      30
