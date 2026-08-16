@@ -14,14 +14,15 @@ Adafruit_SSD1306 display(
 );
 
 DisplayData displayData = {
-    18.6,      // solarVoltage
-    6.70,      // batteryVoltage
-    7.07,      // ph
-    400.0,     // tds
-    5.06,      // dissolvedOxygen
-    28.05,     // temperature
-    5,         // signalLevel
-    "ONLINE"   // statusText
+    00.0,      // solarVoltage
+    0.00,      // batteryVoltage
+    0.00,      // ph
+    0.0,     // tds
+    0.00,      // dissolvedOxygen
+    0.00,     // temperature
+    0,         // signalLevel
+    "ONLINE",  // statusText
+    50        // batteryPercent (new)
 };
 
 TaskHandle_t displayTaskHandle = NULL;
@@ -30,25 +31,25 @@ QueueHandle_t displayCommandQueue = NULL;
 // ============================================================
 // Helper functions (static to avoid external linkage)
 // ============================================================
-static void drawBatteryIcon(float voltage) {
-    int fillWidth = 0;
-    if (voltage >= 4.2) fillWidth = 12;
-    else if (voltage <= 3.0) fillWidth = 0;
-    else fillWidth = (int)((voltage - 3.0) / (4.2 - 3.0) * 12);
+static void drawBatteryIcon(int percent) {
+    if (percent < 0) percent = 0;
+    if (percent > 100) percent = 100;
 
-    display.drawRect(108, 1, 16, 7, SSD1306_WHITE);
-    display.fillRect(124, 3, 2, 3, SSD1306_WHITE);
+    display.drawRect(2, 1, 16, 7, SSD1306_WHITE);
+    display.fillRect(18, 3, 2, 3, SSD1306_WHITE);
+
+    int fillWidth = (percent * 12) / 100;
     if (fillWidth > 0) {
-        display.fillRect(110, 3, fillWidth, 3, SSD1306_WHITE);
+        display.fillRect(4, 3, fillWidth, 3, SSD1306_WHITE);
     }
 }
 
 static void drawSignalBars(int level) {
-    if (level >= 1) display.fillRect(112, 21, 2, 3,  SSD1306_WHITE);
-    if (level >= 2) display.fillRect(115, 19, 2, 5,  SSD1306_WHITE);
-    if (level >= 3) display.fillRect(118, 17, 2, 7,  SSD1306_WHITE);
-    if (level >= 4) display.fillRect(121, 15, 2, 9,  SSD1306_WHITE);
-    if (level >= 5) display.fillRect(124, 13, 2, 11, SSD1306_WHITE);
+    if (level >= 1) display.fillRect(112, 5, 2, 4,  SSD1306_WHITE);
+    if (level >= 2) display.fillRect(115, 4, 2, 5,  SSD1306_WHITE);
+    if (level >= 3) display.fillRect(118, 3, 2, 6,  SSD1306_WHITE);
+    if (level >= 4) display.fillRect(121, 2, 2, 7,  SSD1306_WHITE);
+    if (level >= 5) display.fillRect(124, 1, 2, 8,  SSD1306_WHITE);
 }
 
 // ============================================================
@@ -92,7 +93,6 @@ static void displayBootAnimation() {
         delay(20);
     }
 
-    // Finish at 100%
     display.clearDisplay();
     display.setTextSize(3);
     const char* title = "DMA";
@@ -154,50 +154,55 @@ static void displayHomePage() {
     const int RIGHT = 125;
     const int DIV   = 63;
 
-    display.setCursor(LEFT, 1);
-    display.print("DMA DataLogger");
+    // ========== TOP ROW: Battery (left), Heading (center), Signal (right) ==========
+    drawBatteryIcon(displayData.batteryPercent);   // ✅ use percentage
+    drawSignalBars(displayData.signalLevel);
 
-    drawBatteryIcon(displayData.batteryVoltage);
+    const char* title = "DataLogger";
+    int16_t x1, y1;
+    uint16_t w, h;
+    display.getTextBounds(title, 0, 0, &x1, &y1, &w, &h);
+    display.setCursor((SCREEN_WIDTH - w) / 2, 1);
+    display.print(title);
 
     display.drawLine(LEFT, 10, RIGHT, 10, SSD1306_WHITE);
 
-    display.setCursor(LEFT, 13);
+    display.setCursor(LEFT, 15);
     display.print("Status: ");
     display.print(displayData.statusText);
 
-    drawSignalBars(displayData.signalLevel);
-
-    display.drawLine(LEFT, 27, RIGHT, 27, SSD1306_WHITE);
+    display.drawLine(LEFT, 24, RIGHT, 24, SSD1306_WHITE);
 
     char buffer[20];
+
     snprintf(buffer, sizeof(buffer), "Sol:%.1fV", displayData.solarVoltage);
-    display.setCursor(LEFT, 30);
+    display.setCursor(LEFT, 27);
     display.print(buffer);
 
     snprintf(buffer, sizeof(buffer), "Bat:%.2fV", displayData.batteryVoltage);
-    display.setCursor(67, 30);
+    display.setCursor(67, 27);
     display.print(buffer);
 
-    display.drawLine(DIV, 28, DIV, 39, SSD1306_WHITE);
-    display.drawLine(LEFT, 40, RIGHT, 40, SSD1306_WHITE);
+    display.drawLine(DIV, 25, DIV, 35, SSD1306_WHITE);
+    display.drawLine(LEFT, 38, RIGHT, 38, SSD1306_WHITE);
 
     snprintf(buffer, sizeof(buffer), "pH:%.2f", displayData.ph);
-    display.setCursor(LEFT, 43);
+    display.setCursor(LEFT, 41);
     display.print(buffer);
 
     snprintf(buffer, sizeof(buffer), "Tmp:%.2f", displayData.temperature);
-    display.setCursor(LEFT, 54);
+    display.setCursor(LEFT, 52);
     display.print(buffer);
 
     snprintf(buffer, sizeof(buffer), "TDS:%.0f", displayData.tds);
-    display.setCursor(67, 43);
+    display.setCursor(67, 41);
     display.print(buffer);
 
     snprintf(buffer, sizeof(buffer), "DO:%.2f", displayData.dissolvedOxygen);
-    display.setCursor(67, 54);
+    display.setCursor(67, 52);
     display.print(buffer);
 
-    display.drawLine(DIV, 41, DIV, 63, SSD1306_WHITE);
+    display.drawLine(DIV, 39, DIV, 63, SSD1306_WHITE);
 
     display.display();
 }
@@ -253,6 +258,13 @@ void updateBatteryVoltage(float value) {
     sendDisplayCommand(DISPLAY_UPDATE_HOME);
 }
 
+void updateBatteryPercentage(int percent) {
+    if (percent < 0) percent = 0;
+    if (percent > 100) percent = 100;
+    displayData.batteryPercent = percent;
+    sendDisplayCommand(DISPLAY_UPDATE_HOME);
+}
+
 void updatePH(float value) {
     displayData.ph = value;
     sendDisplayCommand(DISPLAY_UPDATE_HOME);
@@ -288,13 +300,23 @@ void updateStatus(const char* status) {
 void updateAllDisplayValues(float solar, float batt, float ph, float tds, float doVal, float temp, int signal, const char* status) {
     displayData.solarVoltage = solar;
     displayData.batteryVoltage = batt;
+
+    float minV = 3.0f;
+    float maxV = 4.2f;
+    int battPercent = (int)((batt - minV) / (maxV - minV) * 100.0f);
+    if (battPercent < 0) battPercent = 0;
+    if (battPercent > 100) battPercent = 100;
+    displayData.batteryPercent = battPercent;
+
     displayData.ph = ph;
     displayData.tds = tds;
     displayData.dissolvedOxygen = doVal;
     displayData.temperature = temp;
+
     if (signal < 0) signal = 0;
     if (signal > 5) signal = 5;
     displayData.signalLevel = signal;
+
     displayData.statusText = status;
     sendDisplayCommand(DISPLAY_UPDATE_HOME);
 }
@@ -325,4 +347,12 @@ void displayTask(void* parameter) {
             }
         }
     }
+}
+
+int rssiToSignalLevel(int rssi) {
+    if (rssi < 10) return 1;
+    if (rssi > 30) return 5;
+
+    // Map 10..30 → 2..5
+    return map(rssi, 10, 30, 2, 5);
 }

@@ -26,7 +26,7 @@ void setup() {
     initSensors();
     
     sendLedCommand(LED_OFFLINE);
-    // sendDisplayCommand(DISPLAY_OFFLINE);
+    updateStatus("GSM OFFLINE");
 
     pinMode(ACLINE_PIN, INPUT);  
     
@@ -275,6 +275,10 @@ void publishHeartbeat() {
     MQTTMessage hbMsg;
     snprintf(hbMsg.topic, sizeof(hbMsg.topic), "%s", MQTT_PUB);
     uint8_t rssi = modem.getSignalQuality();
+
+    int signalLevel = rssiToSignalLevel(rssi);
+    updateSignalStrength(signalLevel);
+
     int health = ESP.getFreeHeap();
     int uptime_m = millis() / 60000;
 
@@ -401,7 +405,19 @@ void publishSensorsData() {
         SerialMon.print("Batt Mapped (0-1024): ");
         SerialMon.println(sensorData.battMapped, 1);
         SerialMon.println("------------------------\n");
-        updateBatteryVoltage(sensorData.batteryVoltage);
+        
+
+        float batteryVoltage = sensorData.batteryVoltage;
+        
+        // Update display voltage
+        updateBatteryVoltage(batteryVoltage);
+        
+        // Calculate percentage and update battery icon
+        int percent = batteryVoltageToPercent(batteryVoltage);
+
+        //Update Battery Percentage
+        updateBatteryPercentage(percent);
+        
 
         // TDS
         SerialMon.print("TDS Raw: ");

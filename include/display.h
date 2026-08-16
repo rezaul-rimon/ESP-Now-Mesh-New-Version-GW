@@ -1,4 +1,3 @@
-// display.h
 #pragma once
 
 #include <Arduino.h>
@@ -6,9 +5,6 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 
-// ============================================================
-// OLED Configuration
-// ============================================================
 #define SCREEN_WIDTH    128
 #define SCREEN_HEIGHT   64
 
@@ -22,9 +18,6 @@
 #define DISPLAY_CMD_QUEUE_SIZE  10
 #define DISPLAY_TASK_STACK      4096
 
-// ============================================================
-// Display Commands (enum)
-// ============================================================
 enum DisplayCommandType {
     DISPLAY_BOOT,
     DISPLAY_OFFLINE,
@@ -40,13 +33,10 @@ enum DisplayCommandType {
     DISPLAY_OTA,
     DISPLAY_ERROR,
     DISPLAY_HOME,
-    DISPLAY_UPDATE_HOME,   // Added for dynamic updates
+    DISPLAY_UPDATE_HOME,
     DISPLAY_CLEAR
 };
 
-// ============================================================
-// Display Data Structure (values shown on home page)
-// ============================================================
 struct DisplayData {
     float solarVoltage;
     float batteryVoltage;
@@ -55,27 +45,23 @@ struct DisplayData {
     float dissolvedOxygen;   // DO
     float temperature;
     int   signalLevel;       // 0..5
-    const char* statusText;  // e.g., "ONLINE"
+    const char* statusText;
+    int   batteryPercent;    // 0..100   ✅ <-- added
 };
 
-// ============================================================
-// Global extern declarations
-// ============================================================
 extern Adafruit_SSD1306 display;
 extern DisplayData displayData;
 extern TaskHandle_t displayTaskHandle;
 extern QueueHandle_t displayCommandQueue;
 
-// ============================================================
-// Function prototypes
-// ============================================================
 void Display_setup();
 void sendDisplayCommand(DisplayCommandType type);
 void displayTask(void* parameter);
 
-// Public update functions
+// Update functions
 void updateSolarVoltage(float value);
 void updateBatteryVoltage(float value);
+void updateBatteryPercentage(int percent);
 void updatePH(float value);
 void updateTDS(float value);
 void updateDissolvedOxygen(float value);
