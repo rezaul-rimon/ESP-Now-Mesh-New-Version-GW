@@ -1,5 +1,7 @@
 #pragma once
 
+#define DISPLAY_WAKE_TIMEOUT_MS   20 * 1000   // or 20000 for 30 seconds
+
 #include <Arduino.h>
 #include <SPI.h>
 #include <Adafruit_GFX.h>
@@ -20,20 +22,10 @@
 
 enum DisplayCommandType {
     DISPLAY_BOOT,
-    DISPLAY_OFFLINE,
-    DISPLAY_GSM_INIT,
-    DISPLAY_GSM_CONNECTING,
-    DISPLAY_GSM_CONNECTED,
-    DISPLAY_MQTT_CONNECTING,
-    DISPLAY_ONLINE,
-    DISPLAY_SENSOR_DATA,
-    DISPLAY_RF_CMD,
-    DISPLAY_RF_ACK,
-    DISPLAY_RF_HB,
-    DISPLAY_OTA,
-    DISPLAY_ERROR,
     DISPLAY_HOME,
     DISPLAY_UPDATE_HOME,
+    DISPLAY_SLEEP,
+    DISPLAY_WAKE,
     DISPLAY_CLEAR
 };
 
@@ -69,3 +61,6 @@ void updateTemperature(float value);
 void updateSignalStrength(int level);
 void updateStatus(const char* status);
 void updateAllDisplayValues(float solar, float batt, float ph, float tds, float doVal, float temp, int signal, const char* status);
+void displaySleep();
+void displayWake();
+void displaySetBrightness(uint8_t brightness);

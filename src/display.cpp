@@ -321,30 +321,72 @@ void updateAllDisplayValues(float solar, float batt, float ph, float tds, float 
     sendDisplayCommand(DISPLAY_UPDATE_HOME);
 }
 
+void displaySleep() {
+    sendDisplayCommand(DISPLAY_SLEEP);
+}
+
+void displayWake() {
+    sendDisplayCommand(DISPLAY_WAKE);
+}
+
+void displaySetBrightness(uint8_t brightness) {
+    // Directly set contrast (0 = dimmest, 255 = brightest)
+    display.ssd1306_command(SSD1306_SETCONTRAST);
+    display.ssd1306_command(brightness);
+}
+
 // ============================================================
 // Display task
 // ============================================================
 void displayTask(void* parameter) {
     DisplayCommandType cmd;
+    const TickType_t checkInterval = pdMS_TO_TICKS(100);
+    unsigned long wakeTimeout = 0;  // 0 = display sleeping
+
     Serial.println("Display Task started");
 
     while (1) {
-        if (xQueueReceive(displayCommandQueue, &cmd, portMAX_DELAY) == pdTRUE) {
+        if (xQueueReceive(displayCommandQueue, &cmd, checkInterval) == pdTRUE) {
             switch (cmd) {
                 case DISPLAY_BOOT:
+                    // Turn on display and set timeout
+                    display.ssd1306_command(SSD1306_DISPLAYON);
+                    wakeTimeout = millis() + DISPLAY_WAKE_TIMEOUT_MS;
                     displayBootAnimation();
                     break;
+
+                case DISPLAY_SLEEP:
+                    display.ssd1306_command(SSD1306_DISPLAYOFF);
+                    wakeTimeout = 0;
+                    break;
+
+                case DISPLAY_WAKE:
+                    display.ssd1306_command(SSD1306_DISPLAYON);
+                    wakeTimeout = millis() + DISPLAY_WAKE_TIMEOUT_MS;
+                    break;
+
                 case DISPLAY_HOME:
                 case DISPLAY_UPDATE_HOME:
+                    // Wake display if not already awake, then reset timeout
+                    display.ssd1306_command(SSD1306_DISPLAYON);
+                    wakeTimeout = millis() + DISPLAY_WAKE_TIMEOUT_MS;
                     displayHomePage();
                     break;
+
                 case DISPLAY_CLEAR:
                     display.clearDisplay();
                     display.display();
                     break;
+
                 default:
                     break;
             }
+        }
+
+        // Auto-sleep check
+        if (wakeTimeout != 0 && millis() > wakeTimeout) {
+            display.ssd1306_command(SSD1306_DISPLAYOFF);
+            wakeTimeout = 0;
         }
     }
 }
@@ -356,3 +398,4 @@ int rssiToSignalLevel(int rssi) {
     // Map 10..30 → 2..5
     return map(rssi, 10, 30, 2, 5);
 }
+

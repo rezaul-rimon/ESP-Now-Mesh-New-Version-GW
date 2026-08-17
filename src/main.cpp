@@ -276,9 +276,6 @@ void publishHeartbeat() {
     snprintf(hbMsg.topic, sizeof(hbMsg.topic), "%s", MQTT_PUB);
     uint8_t rssi = modem.getSignalQuality();
 
-    int signalLevel = rssiToSignalLevel(rssi);
-    updateSignalStrength(signalLevel);
-
     int health = ESP.getFreeHeap();
     int uptime_m = millis() / 60000;
 
@@ -303,67 +300,6 @@ void publishHeartbeat() {
         SerialMon.println("MainTask: Heartbeat queued");
     }
 }
-
-// void publishHeartbeat() {
-//     static uint32_t packetNumber = 0;
-//     packetNumber++;
-
-//     static char jsonBuffer[512];
-
-//     uint8_t rssi = modem.getSignalQuality();
-//     int health = ESP.getFreeHeap();
-//     int uptime_m = millis() / 60000;
-
-//     bool acLine = digitalRead(ACLINE_PIN) == HIGH;
-//     bool gsmActive = true;
-//     bool sdReady = false;
-
-//     const int itemCount = 9;   // number of fields inside "data"
-
-//     int len = 0;
-//     len += snprintf(jsonBuffer + len, sizeof(jsonBuffer) - len,
-//         "{\"status\":\"success\","
-//         "\"device_id\":\"%s\","
-//         "\"type\":\"heartbeat\","
-//         "\"packet\":%u,"
-//         "\"timestamp\":NO_TIMESTAMP,"
-//         "\"item_count\":%d,"
-//         "\"data\":{",
-//         DEVICE_ID.c_str(), packetNumber, itemCount);
-
-//     len += snprintf(jsonBuffer + len, sizeof(jsonBuffer) - len,
-//         "\"FWV\":\"%s\",", FW_VERSION);
-//     len += snprintf(jsonBuffer + len, sizeof(jsonBuffer) - len,
-//         "\"HWV\":\"%s\",", HW_VERSION);
-//     len += snprintf(jsonBuffer + len, sizeof(jsonBuffer) - len,
-//         "\"ARMED\":\"%s\",", deviceArmed ? "1" : "0");
-//     len += snprintf(jsonBuffer + len, sizeof(jsonBuffer) - len,
-//         "\"DATA_TYPE\":\"%s\",", gsmActive ? "gsm" : "ERROR");
-//     len += snprintf(jsonBuffer + len, sizeof(jsonBuffer) - len,
-//         "\"AC_LINE\":\"%s\",", acLine ? "1" : "0");
-//     len += snprintf(jsonBuffer + len, sizeof(jsonBuffer) - len,
-//         "\"SD_LOGING\":\"%s\",", sdReady ? "1" : "0");
-//     len += snprintf(jsonBuffer + len, sizeof(jsonBuffer) - len,
-//         "\"HEALTH\":%d,", health);
-//     len += snprintf(jsonBuffer + len, sizeof(jsonBuffer) - len,
-//         "\"UP_TIME\":\"%dMin\",", uptime_m);
-//     len += snprintf(jsonBuffer + len, sizeof(jsonBuffer) - len,
-//         "\"RSSI/CSQ\":%d", rssi);
-
-//     len += snprintf(jsonBuffer + len, sizeof(jsonBuffer) - len,
-//         "}}");
-
-//     jsonBuffer[sizeof(jsonBuffer) - 1] = '\0';
-
-//     MQTTMessage hbMsg;
-//     snprintf(hbMsg.topic, sizeof(hbMsg.topic), "%s", MQTT_PUB);
-//     snprintf(hbMsg.payload, sizeof(hbMsg.payload), "%s", jsonBuffer);
-
-//     if (xQueueSend(mqttPublishQueue, &hbMsg, pdMS_TO_TICKS(100)) == pdTRUE) {
-//         SerialMon.println("MainTask: Heartbeat queued");
-//     }
-//     SerialMon.println(jsonBuffer);
-// }
 
 void publisMoreFishHeartbeat() {
     MQTTMessage hbMsg;
@@ -406,6 +342,8 @@ void publishSensorsData() {
         SerialMon.println(sensorData.battMapped, 1);
         SerialMon.println("------------------------\n");
         
+        //=============================================
+        //==== Updatting Display Text =================
 
         float batteryVoltage = sensorData.batteryVoltage;
         
@@ -417,6 +355,15 @@ void publishSensorsData() {
 
         //Update Battery Percentage
         updateBatteryPercentage(percent);
+
+        //Get Signal Strength
+        uint8_t rssi = modem.getSignalQuality();
+
+        //Get Strength Level form RSSI
+        int signalLevel = rssiToSignalLevel(rssi);
+
+        //Update Display Sigal Strength
+        updateSignalStrength(signalLevel);
         
 
         // TDS

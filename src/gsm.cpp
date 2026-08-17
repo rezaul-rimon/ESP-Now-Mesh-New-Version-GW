@@ -1,5 +1,12 @@
 #include "gsm.h"
 
+//These Function is gsm.h property I have redeclared it
+void publishHeartbeat();
+void publisMoreFishHeartbeat();
+void publishSensorsData();
+//=================================
+
+
 // ==================== Configuration ====================
 const char apn[] = "internet";
 const char user[] = "";
@@ -311,6 +318,11 @@ void networkTask(void* parameter) {
                 sendLedCommand(LED_ONLINE);
                 updateStatus("ONLINE");
                 // sendDisplayCommand(DISPLAY_ONLINE);
+                publishHeartbeat();
+                vTaskDelay(pdMS_TO_TICKS(100));
+                publisMoreFishHeartbeat();
+                vTaskDelay(pdMS_TO_TICKS(100));
+                publishSensorsData();
 
                 SerialMon.println("NetworkTask: Device ONLINE");
                 lastSuccessfulOperation = millis();

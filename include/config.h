@@ -44,10 +44,10 @@ extern String MAC_FALLBACK_ID;
 #define OFF LOW
 
 // Timing Configuration (const variables are okay in header)
-const unsigned long HEARTBEAT_INTERVAL = 1 * 30 * 1000UL;  // 5 minute
+const unsigned long HEARTBEAT_INTERVAL = 2 * 60 * 1000UL;  // 5 minute
 extern unsigned long lastHeartbeatTime;
 
-const unsigned long DATA_INTERVAL = 1 * 60 * 1000UL;  // 5 minute
+const unsigned long DATA_INTERVAL = 5 * 60 * 1000UL;  // 5 minute
 extern unsigned long lastDataTime;
 
 const unsigned long MAIN_TASK_PRIORITY = 2;
