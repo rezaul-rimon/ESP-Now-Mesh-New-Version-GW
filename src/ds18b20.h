@@ -41,15 +41,16 @@ void ds18b20_setup(){
 
     // Store addresses at startup
     for (int i = 0; i < sensorCount; i++) {
-    if (sensors.getAddress(sensorAddress[i], i)) {
-        Serial.print("Sensor ");
-        Serial.print(i);
-        Serial.print(" Address: ");
-        Serial.println(addressToString(sensorAddress[i]));
-    } else {
-        Serial.print("Could not read address for sensor ");
-        Serial.println(i);
-    }
+        if (sensors.getAddress(sensorAddress[i], i)) {
+            sensors.setResolution(sensorAddress[i], 12);
+            Serial.print("Sensor ");
+            Serial.print(i);
+            Serial.print(" Address: ");
+            Serial.println(addressToString(sensorAddress[i]));
+        } else {
+            Serial.print("Could not read address for sensor ");
+            Serial.println(i);
+        }
     }
     Serial.println("----------------------------");
     Serial.println();
