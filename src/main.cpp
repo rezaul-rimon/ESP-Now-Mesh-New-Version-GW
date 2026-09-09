@@ -229,50 +229,40 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
         return;
     }
 
-    if(message == "get_sim_info"){
+    if (message == "get_sim_info") {
         String operatorCode = modem.getOperator();
         String operatorName = operatorCode;
 
-        // Convert operator code to readable name
-        if (operatorCode == "47001") {
-            operatorName = "Grameenphone";
-        }
-        else if (operatorCode == "47002") {
-            operatorName = "Robi";
-        }
-        else if (operatorCode == "47003") {
-            operatorName = "Banglalink";
-        }
-        else if (operatorCode == "47004") {
-            operatorName = "Teletalk";
-        }
+        if (operatorCode == "47001") operatorName = "Grameenphone";
+        else if (operatorCode == "47002") operatorName = "Robi";
+        else if (operatorCode == "47003") operatorName = "Banglalink";
+        else if (operatorCode == "47004") operatorName = "Teletalk";
 
         Serial.print("Operator: ");
         Serial.println(operatorName);
 
+        // Get ICCID (SIM card number)
+        String iccid = modem.getSimCCID();
+        iccid.trim();                       // remove \r, \n, spaces
 
-        // ================= IMSI =================
+        Serial.print("ICCID: ");
+        Serial.println(iccid);
 
-        String imsi = modem.getIMSI();
+        // Extract first 18 digits (or full string if shorter)
+        String simID = iccid.length() >= 18 ? iccid.substring(0, 18) : iccid;
 
-        // Last 8 digit only
-        String simID = "";
-
-        if (imsi.length() >= 8) {
-            simID = imsi.substring(imsi.length() - 8);
-        }
-
-        Serial.print("SIM ID: ");
+        Serial.print("SIM ID (first 18): ");
         Serial.println(simID);
 
         MQTTMessage response2;
         snprintf(response2.topic, sizeof(response2.topic), "%s", MQTT_CHILLER_ACK);
-        snprintf(response2.payload, sizeof(response2.payload), "%s,%s,%s", DEVICE_ID.c_str(),operatorName, simID);
+        snprintf(response2.payload, sizeof(response2.payload), "['%s','Operator:%s','ICCID:%s']",
+                DEVICE_ID.c_str(), operatorName.c_str(), simID.c_str());
         sendLedCommand(LED_PING_ACK);
         xQueueSend(mqttPublishQueue, &response2, pdMS_TO_TICKS(100));
         return;
-
     }
+
 
     if(message == "arm:1") {
         SerialMon.println("MQTT Command: Arm device");
@@ -482,22 +472,41 @@ void publishGWHeartbeat() {
 
 //==================== Data Publishing ====================
 // Data format: 1191032506160004,INCH1101,28D221C90000002B/28.5
-void publishData(){
 
-    // Function to send temperature data
+// Helper function to read temperature with retries
+float readTemperatureWithRetry(DeviceAddress addr) {
+    const int MAX_RETRIES = 3;
+    const unsigned long RETRY_DELAY_MS = 750;  // DS18B20 conversion time (12-bit)
+
+    for (int attempt = 0; attempt < MAX_RETRIES; attempt++) {
+        float temp = sensors.getTempC(addr);
+        if (temp > -100.0f && temp < 125.0f) {   // valid range check
+            return temp;
+        }
+        // Invalid reading – request conversion for this specific sensor and retry
+        sensors.requestTemperaturesByAddress(addr);
+        delay(RETRY_DELAY_MS);
+    }
+    // All retries failed
+    return -127.0f;   // or DEVICE_DISCONNECTED_C
+}
+
+void publishData() {
     #ifdef USE_DS18B20
-        // Placeholder for future data sending logic
-        // Prepare and send MQTT data message
         MQTTMessage dataMsg;
-        
-        sensors.requestTemperatures();   // Trigger conversion
+
+        // Request conversion for all sensors once initially
+        sensors.requestTemperatures();
+
         for (int i = 0; i < sensorCount; i++) {
-            float temperature = sensors.getTempC(sensorAddress[i]);
+            float temperature = readTemperatureWithRetry(sensorAddress[i]);
             String id = addressToString(sensorAddress[i]);
+
             Serial.print(id);
             Serial.print(",");
-            Serial.println(temperature);   // Print exactly as requested
+            Serial.println(temperature);
 
+            // Publish regardless of valid/invalid (so backend knows if sensor is faulty)
             snprintf(
                 dataMsg.payload,
                 sizeof(dataMsg.payload),
@@ -508,18 +517,54 @@ void publishData(){
                 temperature
             );
             strcpy(dataMsg.topic, MQTT_CHILLER_TEMP);
+
             if (xQueueSend(mqttPublishQueue, &dataMsg, pdMS_TO_TICKS(100)) == pdTRUE) {
                 SerialMon.println("MainTask: Sensor Data queued");
             }
-            
         }
 
         SerialMon.println("----------------------------");
-
     #endif
-    //===================================================//
-
 }
+
+// void publishData(){
+
+//     // Function to send temperature data
+//     #ifdef USE_DS18B20
+//         // Placeholder for future data sending logic
+//         // Prepare and send MQTT data message
+//         MQTTMessage dataMsg;
+        
+//         sensors.requestTemperatures();   // Trigger conversion
+//         for (int i = 0; i < sensorCount; i++) {
+//             float temperature = sensors.getTempC(sensorAddress[i]);
+//             String id = addressToString(sensorAddress[i]);
+//             Serial.print(id);
+//             Serial.print(",");
+//             Serial.println(temperature);   // Print exactly as requested
+
+//             snprintf(
+//                 dataMsg.payload,
+//                 sizeof(dataMsg.payload),
+//                 "%s,%s,%s/%.2f",
+//                 DEVICE_ID.c_str(),
+//                 CHILLER_ID.c_str(),
+//                 id.c_str(),
+//                 temperature
+//             );
+//             strcpy(dataMsg.topic, MQTT_CHILLER_TEMP);
+//             if (xQueueSend(mqttPublishQueue, &dataMsg, pdMS_TO_TICKS(100)) == pdTRUE) {
+//                 SerialMon.println("MainTask: Sensor Data queued");
+//             }
+            
+//         }
+
+//         SerialMon.println("----------------------------");
+
+//     #endif
+//     //===================================================//
+
+// }
 
 // ==================== Helper Functions ====================
 void suspendAllTasks() {
