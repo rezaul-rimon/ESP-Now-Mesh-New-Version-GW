@@ -19,7 +19,7 @@
 #define WORK_PACKAGE "1293"
 #define DEVICE_TYPE "03"
 #define DEVICE_CODE_UPLOAD_DATE "260805"
-#define DEVICE_SERIAL_ID "0001"
+#define DEVICE_SERIAL_ID "0002"
 
 #define UNIQUE_DEVICE_ID WORK_PACKAGE DEVICE_TYPE DEVICE_CODE_UPLOAD_DATE DEVICE_SERIAL_ID
 //=========================================================================================//
@@ -31,7 +31,7 @@ QueueHandle_t mqttPublishQueue = NULL;
 
 String DEVICE_ID = "";
 String MAC_FALLBACK_ID = "";
-String CHILLER_ID = "INCHG12930001";
+String CHILLER_ID = "INCHG12930002";
 
 
 // Serial and SIM-A7670 pin config
@@ -46,10 +46,10 @@ String CHILLER_ID = "INCHG12930001";
 #define OFF LOW
 
 // Timing Configuration
-const unsigned long DATA_INTERVAL = 5 * 60000UL;  // 5 minute
+const unsigned long DATA_INTERVAL = 2 * 60 * 1000UL;  // 2 minute
 unsigned long lastDataTime = 0;
 const unsigned long MAIN_TASK_PRIORITY = 2;
-const unsigned long HEARTBEAT_INTERVAL = 5 * 60000UL;
+const unsigned long HEARTBEAT_INTERVAL = 5 * 60 * 1000UL;
 const unsigned long GSM_ERROR_RETRY_DELAY = 10000UL;
 unsigned long lastHeartbeat = 0;
 unsigned long lastGsmErrorTime = 0;
