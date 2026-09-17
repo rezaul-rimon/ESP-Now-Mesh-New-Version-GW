@@ -18,7 +18,7 @@
 #define WORK_PACKAGE "1293"
 #define DEVICE_TYPE "03"
 #define DEVICE_CODE_UPLOAD_DATE "260813"
-#define DEVICE_SERIAL_ID "0001"
+#define DEVICE_SERIAL_ID "0002"
 
 #define UNIQUE_DEVICE_ID WORK_PACKAGE DEVICE_TYPE DEVICE_CODE_UPLOAD_DATE DEVICE_SERIAL_ID
 //=========================================================================================//
